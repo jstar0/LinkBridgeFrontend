@@ -1,0 +1,8 @@
+<view class="lb-page">
+  <t-navbar title="历史归档" leftArrow />
+
+  <view class="lb-page__content">
+    <t-empty description="归档页占位" />
+  </view>
+</view>
+

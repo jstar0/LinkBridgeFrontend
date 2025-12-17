@@ -1,0 +1,32 @@
+{
+  "darkmode": true,
+  "pages": [
+    "pages/linkbridge/dashboard/dashboard",
+    "pages/linkbridge/search/search",
+    "pages/linkbridge/settings/settings",
+    "pages/linkbridge/archive/archive",
+    "pages/linkbridge/chat/chat"
+  ],
+  "themeLocation": "theme.json",
+  "usingComponents": {
+    "t-button": "tdesign-miniprogram/button/button",
+    "t-icon": "tdesign-miniprogram/icon/icon",
+    "t-navbar": "tdesign-miniprogram/navbar/navbar"
+  },
+  "window": {
+    "navigationBarTitleText": "LinkBridge",
+    "navigationStyle": "custom",
+    "navigationBarTextStyle": "@navTxtStyle"
+  },
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "rendererOptions": {
+    "skyline": {
+      "disableABTest": true,
+      "defaultDisplayBlock": true,
+      "defaultContentBox": true,
+      "sdkVersionBegin": "3.4.3",
+      "sdkVersionEnd": "15.255.255"
+    }
+  }
+}

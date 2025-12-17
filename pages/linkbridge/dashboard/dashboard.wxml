@@ -1,0 +1,92 @@
+<view class="lb-page">
+  <t-navbar title="消息列表">
+    <view slot="capsule" class="lb-dashboard__capsule">
+      <t-icon
+        class="lb-dashboard__capsule-icon"
+        name="history"
+        size="40rpx"
+        bind:tap="onTapArchive"
+        aria-role="button"
+        aria-label="历史归档"
+      />
+    </view>
+  </t-navbar>
+
+  <view class="lb-page__content">
+    <view class="lb-dashboard__search">
+      <t-search placeholder="搜索" value="{{searchValue}}" bind:change="onSearchChange" />
+    </view>
+
+    <view wx:if="{{activeSessions.length > 0}}" class="lb-dashboard__sessions">
+      <t-cell-group bordered="{{false}}">
+        <t-cell
+          wx:for="{{activeSessions}}"
+          wx:key="id"
+          title="{{item.displayName}}"
+          description="{{item.lastMessagePreview}}"
+          hover
+          bind:tap="onTapSession"
+          data-session-id="{{item.id}}"
+          data-peer-name="{{item.peerName}}"
+        >
+          <view slot="left-icon" class="lb-dashboard__avatar-wrapper">
+            <t-avatar icon="user" shape="round" />
+          </view>
+          <view slot="note" class="lb-dashboard__cell-note">
+            <text class="lb-dashboard__time">{{item.timeText}}</text>
+            <t-badge wx:if="{{item.unreadCount > 0}}" count="{{item.unreadCount}}" />
+          </view>
+        </t-cell>
+      </t-cell-group>
+    </view>
+
+    <t-empty wx:else description="暂无消息" />
+  </view>
+
+  <t-fab
+    icon="qrcode"
+    aria-label="我的二维码"
+    usingCustomNavbar
+    customStyle="bottom: 220px;"
+    button-props="{{myQrFabButtonProps}}"
+    bind:click="onTapMyQr"
+  />
+
+  <t-fab
+    icon="scan"
+    aria-label="扫一扫"
+    usingCustomNavbar
+    customStyle="bottom: 140px;"
+    bind:click="onTapScan"
+  />
+
+  <t-popup
+    visible="{{isConnectionModalVisible}}"
+    placement="center"
+    overlay
+    usingCustomNavbar
+    bind:visible-change="onConnectionModalVisibleChange"
+  >
+    <view class="lb-connection-modal">
+      <view class="lb-connection-modal__header">
+        <text class="lb-connection-modal__title">我的名片</text>
+        <t-icon
+          class="lb-connection-modal__close"
+          name="close"
+          size="48rpx"
+          bind:tap="onCloseConnectionModal"
+          aria-role="button"
+          aria-label="关闭"
+        />
+      </view>
+
+      <view class="lb-connection-modal__qr">
+        <t-icon name="qrcode" size="80rpx" aria-label="二维码占位" />
+      </view>
+
+      <view class="lb-connection-modal__hint">扫码即可建立会话</view>
+    </view>
+  </t-popup>
+
+  <linkbridge-tabbar value="dashboard" />
+</view>

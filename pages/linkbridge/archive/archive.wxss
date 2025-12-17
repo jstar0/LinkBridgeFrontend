@@ -1,0 +1,10 @@
+.lb-page {
+  min-height: 100vh;
+  background: var(--td-bg-color-page);
+}
+
+.lb-page__content {
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+

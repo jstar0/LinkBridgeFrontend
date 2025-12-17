@@ -1,0 +1,10 @@
+<view class="lb-page">
+  <t-navbar title="我的" />
+
+  <view class="lb-page__content">
+    <t-empty description="我的页占位" />
+  </view>
+
+  <linkbridge-tabbar value="settings" />
+</view>
+

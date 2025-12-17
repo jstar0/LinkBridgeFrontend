@@ -1,0 +1,10 @@
+<view class="lb-page">
+  <t-navbar title="搜索" />
+
+  <view class="lb-page__content">
+    <t-empty description="搜索页占位" />
+  </view>
+
+  <linkbridge-tabbar value="search" />
+</view>
+

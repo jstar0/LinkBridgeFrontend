@@ -1,0 +1,15 @@
+<t-tab-bar value="{{innerValue}}" bindchange="onChange">
+  <t-tab-bar-item value="dashboard">
+    <t-icon slot="icon" name="home" size="40rpx" />
+    首页
+  </t-tab-bar-item>
+  <t-tab-bar-item value="search">
+    <t-icon slot="icon" name="search" size="40rpx" />
+    搜索
+  </t-tab-bar-item>
+  <t-tab-bar-item value="settings">
+    <t-icon slot="icon" name="user" size="40rpx" />
+    我的
+  </t-tab-bar-item>
+</t-tab-bar>
+

@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# WeChat DevTools
+project.private.config.json
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
