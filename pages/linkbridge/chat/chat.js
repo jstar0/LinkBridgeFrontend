@@ -1,6 +1,6 @@
 import themeChangeBehavior from 'tdesign-miniprogram/mixins/theme-change';
 
-const linkbridgeStore = require('../../../utils/linkbridge/store');
+const api = require('../../../utils/linkbridge/api');
 
 function normalizeMessageForView(message) {
   if (!message || typeof message !== 'object') return null;
@@ -9,11 +9,13 @@ function normalizeMessageForView(message) {
   const text = typeof message.text === 'string' ? message.text : '';
 
   return {
-    ...message,
+    id: message.id,
+    sessionId: message.sessionId,
     sender: message.sender === 'peer' ? 'peer' : 'me',
     type: typeof message.type === 'string' ? message.type : 'text',
     text,
     meta,
+    createdAt: message.createdAtMs || message.createdAt,
   };
 }
 
@@ -33,30 +35,41 @@ Page({
     canSend: false,
     isPlusMenuVisible: false,
     scrollIntoView: '',
+    loading: false,
   },
 
   onLoad(query) {
-    linkbridgeStore.bootstrapState();
-
     const sessionId = query?.sessionId || '';
-    const peerNameFromQuery = query?.peerName || '';
-
-    let peerName = peerNameFromQuery;
-    if (!peerName && sessionId) {
-      const session = linkbridgeStore.getSessionById(sessionId);
-      peerName = session?.peerName || '';
-    }
-
-    const messages = buildMessageViewModels(linkbridgeStore.listMessages(sessionId));
-    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+    const peerName = query?.peerName || '';
 
     this.setData({
       sessionId,
       peerName,
       navbarTitle: peerName || '聊天',
-      messages,
-      scrollIntoView: lastMessage ? `msg-${lastMessage.id}` : '',
     });
+
+    this.loadMessages(sessionId);
+  },
+
+  loadMessages(sessionId) {
+    if (!sessionId) return;
+
+    this.setData({ loading: true });
+    api
+      .listMessages(sessionId)
+      .then((messages) => {
+        const viewModels = buildMessageViewModels(messages);
+        const lastMessage = viewModels.length > 0 ? viewModels[viewModels.length - 1] : null;
+        this.setData({
+          messages: viewModels,
+          scrollIntoView: lastMessage ? `msg-${lastMessage.id}` : '',
+          loading: false,
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to load messages:', err);
+        this.setData({ loading: false });
+      });
   },
 
   onInputChange(e) {
@@ -80,11 +93,17 @@ Page({
     const nextText = typeof this.data.inputValue === 'string' ? this.data.inputValue.trim() : '';
     if (!sessionId || !nextText) return;
 
-    const message = linkbridgeStore.addTextMessage(sessionId, nextText, 'me');
-    if (!message) return;
-
     this.setData({ inputValue: '', canSend: false });
-    this.appendMessageAndScroll(message);
+
+    api
+      .sendTextMessage(sessionId, nextText)
+      .then((message) => {
+        this.appendMessageAndScroll(message);
+      })
+      .catch((err) => {
+        console.error('Failed to send message:', err);
+        wx.showToast({ title: '发送失败', icon: 'none' });
+      });
   },
 
   onTapPlus() {
@@ -99,27 +118,51 @@ Page({
     const sessionId = this.data.sessionId;
     if (!sessionId) return;
 
-    const message = linkbridgeStore.addAttachmentMessage(sessionId, 'image', { name: 'demo.jpg' });
-    if (!message) return;
-
     this.setData({ isPlusMenuVisible: false });
-    this.appendMessageAndScroll(message);
+
+    api
+      .sendAttachmentMessage(sessionId, 'image', { name: 'demo.jpg' })
+      .then((message) => {
+        this.appendMessageAndScroll(message);
+      })
+      .catch((err) => {
+        console.error('Failed to send image:', err);
+        wx.showToast({ title: '发送失败', icon: 'none' });
+      });
   },
 
   onTapSimulateFile() {
     const sessionId = this.data.sessionId;
     if (!sessionId) return;
 
-    const message = linkbridgeStore.addAttachmentMessage(sessionId, 'file', { name: 'demo.pdf' });
-    if (!message) return;
-
     this.setData({ isPlusMenuVisible: false });
-    this.appendMessageAndScroll(message);
+
+    api
+      .sendAttachmentMessage(sessionId, 'file', { name: 'demo.pdf' })
+      .then((message) => {
+        this.appendMessageAndScroll(message);
+      })
+      .catch((err) => {
+        console.error('Failed to send file:', err);
+        wx.showToast({ title: '发送失败', icon: 'none' });
+      });
   },
 
   onTapEndSession() {
     const sessionId = this.data.sessionId;
-    if (sessionId) linkbridgeStore.archiveSession(sessionId);
-    wx.reLaunch({ url: '/pages/linkbridge/dashboard/dashboard' });
+    if (!sessionId) {
+      wx.reLaunch({ url: '/pages/linkbridge/dashboard/dashboard' });
+      return;
+    }
+
+    api
+      .archiveSession(sessionId)
+      .then(() => {
+        wx.reLaunch({ url: '/pages/linkbridge/dashboard/dashboard' });
+      })
+      .catch((err) => {
+        console.error('Failed to archive session:', err);
+        wx.reLaunch({ url: '/pages/linkbridge/dashboard/dashboard' });
+      });
   },
 });

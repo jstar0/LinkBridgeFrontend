@@ -1,5 +1,5 @@
 const themeChangeBehavior = require('tdesign-miniprogram/mixins/theme-change');
-const linkbridgeStore = require('../../../utils/linkbridge/store');
+const api = require('../../../utils/linkbridge/api');
 
 function pad2(value) {
   return value < 10 ? `0${value}` : `${value}`;
@@ -17,6 +17,7 @@ Page({
     searchValue: '',
     activeSessions: [],
     isConnectionModalVisible: false,
+    loading: false,
     myQrFabButtonProps: {
       theme: 'default',
       variant: 'outline',
@@ -24,7 +25,6 @@ Page({
   },
 
   onLoad() {
-    linkbridgeStore.bootstrapState();
     this.refreshSessions();
   },
 
@@ -33,13 +33,27 @@ Page({
   },
 
   refreshSessions() {
-    const sessions = linkbridgeStore.listActiveSessions();
-    const viewModels = sessions.map((session) => ({
-      ...session,
-      timeText: formatTimeText(session.lastMessageAt),
-    }));
-
-    this.setData({ activeSessions: viewModels });
+    this.setData({ loading: true });
+    api
+      .listSessions('active')
+      .then((sessions) => {
+        const viewModels = sessions.map((s) => ({
+          id: s.id,
+          peerName: s.peerName,
+          peerIdentity: s.peerIdentity,
+          displayName: `[${s.peerIdentity}] ${s.peerName}`,
+          lastMessagePreview: s.lastMessageText || '',
+          lastMessageAt: s.updatedAtMs,
+          timeText: formatTimeText(s.updatedAtMs),
+          status: s.status,
+        }));
+        this.setData({ activeSessions: viewModels, loading: false });
+      })
+      .catch((err) => {
+        console.error('Failed to load sessions:', err);
+        this.setData({ loading: false });
+        wx.showToast({ title: '加载失败', icon: 'none' });
+      });
   },
 
   onTapArchive() {
@@ -77,13 +91,20 @@ Page({
   },
 
   onTapScan() {
-    const newSession = linkbridgeStore.createSessionFromScan();
-    this.refreshSessions();
-
-    wx.navigateTo({
-      url:
-        `/pages/linkbridge/chat/chat?sessionId=${encodeURIComponent(newSession.id)}` +
-        `&peerName=${encodeURIComponent(newSession.peerName)}`,
-    });
+    const peerName = `Student_${Math.floor(1000 + Math.random() * 9000)}`;
+    api
+      .createSession(peerName, 'student')
+      .then((session) => {
+        this.refreshSessions();
+        wx.navigateTo({
+          url:
+            `/pages/linkbridge/chat/chat?sessionId=${encodeURIComponent(session.id)}` +
+            `&peerName=${encodeURIComponent(session.peerName)}`,
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to create session:', err);
+        wx.showToast({ title: '创建会话失败', icon: 'none' });
+      });
   },
 });
