@@ -93,8 +93,8 @@
     <view class="lb-chat__plus-menu">
       <view class="lb-chat__plus-menu-handle" />
       <t-grid column="2">
-        <t-grid-item text="相册" icon="image" bind:click="onTapSimulateImage" />
-        <t-grid-item text="文件" icon="file" bind:click="onTapSimulateFile" />
+        <t-grid-item text="相册" icon="image" bind:click="onTapChooseImage" />
+        <t-grid-item text="文件" icon="file" bind:click="onTapChooseFile" />
       </t-grid>
     </view>
   </t-popup>

@@ -9,3 +9,21 @@
   box-sizing: border-box;
 }
 
+.lb-settings__profile {
+  margin-bottom: 48rpx;
+}
+
+.lb-settings__avatar-section {
+  display: flex;
+  justify-content: center;
+  padding: 48rpx 0;
+}
+
+.lb-settings__info {
+  margin-top: 24rpx;
+}
+
+.lb-settings__actions {
+  margin-top: 48rpx;
+  padding: 0 32rpx;
+}

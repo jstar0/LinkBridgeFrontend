@@ -2,7 +2,7 @@ import themeChangeBehavior from 'tdesign-miniprogram/mixins/theme-change';
 
 const api = require('../../../utils/linkbridge/api');
 
-function normalizeMessageForView(message) {
+function normalizeMessageForView(message, currentUserId) {
   if (!message || typeof message !== 'object') return null;
 
   const meta = message.meta && typeof message.meta === 'object' ? message.meta : {};
@@ -11,7 +11,8 @@ function normalizeMessageForView(message) {
   return {
     id: message.id,
     sessionId: message.sessionId,
-    sender: message.sender === 'peer' ? 'peer' : 'me',
+    sender: message.senderId === currentUserId ? 'me' : 'peer',
+    senderId: message.senderId,
     type: typeof message.type === 'string' ? message.type : 'text',
     text,
     meta,
@@ -19,9 +20,9 @@ function normalizeMessageForView(message) {
   };
 }
 
-function buildMessageViewModels(messages) {
+function buildMessageViewModels(messages, currentUserId) {
   if (!Array.isArray(messages)) return [];
-  return messages.map(normalizeMessageForView).filter(Boolean);
+  return messages.map((m) => normalizeMessageForView(m, currentUserId)).filter(Boolean);
 }
 
 Page({
@@ -36,35 +37,80 @@ Page({
     isPlusMenuVisible: false,
     scrollIntoView: '',
     loading: false,
+    hasMore: false,
+    currentUserId: '',
   },
 
+  wsHandler: null,
+
   onLoad(query) {
+    if (!api.isLoggedIn()) {
+      wx.reLaunch({ url: '/pages/linkbridge/login/login' });
+      return;
+    }
+
     const sessionId = query?.sessionId || '';
     const peerName = query?.peerName || '';
+    const currentUser = api.getUser();
+    const currentUserId = currentUser?.id || '';
 
     this.setData({
       sessionId,
       peerName,
       navbarTitle: peerName || '聊天',
+      currentUserId,
     });
 
     this.loadMessages(sessionId);
+    this.setupWebSocket(sessionId);
   },
 
-  loadMessages(sessionId) {
+  onUnload() {
+    if (this.wsHandler) {
+      api.removeWebSocketHandler(this.wsHandler);
+      this.wsHandler = null;
+    }
+  },
+
+  setupWebSocket(sessionId) {
+    api.connectWebSocket();
+
+    this.wsHandler = (data) => {
+      if (data.type === 'message.created' && data.sessionId === sessionId) {
+        const message = data.payload?.message;
+        if (message && message.senderId !== this.data.currentUserId) {
+          this.appendMessageAndScroll(message);
+        }
+      }
+    };
+
+    api.addWebSocketHandler(this.wsHandler);
+  },
+
+  loadMessages(sessionId, beforeId) {
     if (!sessionId) return;
 
     this.setData({ loading: true });
     api
-      .listMessages(sessionId)
-      .then((messages) => {
-        const viewModels = buildMessageViewModels(messages);
-        const lastMessage = viewModels.length > 0 ? viewModels[viewModels.length - 1] : null;
-        this.setData({
-          messages: viewModels,
-          scrollIntoView: lastMessage ? `msg-${lastMessage.id}` : '',
-          loading: false,
-        });
+      .listMessages(sessionId, beforeId)
+      .then((result) => {
+        const viewModels = buildMessageViewModels(result.messages, this.data.currentUserId);
+        if (beforeId) {
+          const combined = [...viewModels, ...this.data.messages];
+          this.setData({
+            messages: combined,
+            hasMore: result.hasMore,
+            loading: false,
+          });
+        } else {
+          const lastMessage = viewModels.length > 0 ? viewModels[viewModels.length - 1] : null;
+          this.setData({
+            messages: viewModels,
+            scrollIntoView: lastMessage ? `msg-${lastMessage.id}` : '',
+            hasMore: result.hasMore,
+            loading: false,
+          });
+        }
       })
       .catch((err) => {
         console.error('Failed to load messages:', err);
@@ -79,7 +125,7 @@ Page({
   },
 
   appendMessageAndScroll(message) {
-    const vm = normalizeMessageForView(message);
+    const vm = normalizeMessageForView(message, this.data.currentUserId);
     if (!vm) return;
     const nextMessages = [...(this.data.messages || []), vm];
     this.setData({
@@ -114,38 +160,89 @@ Page({
     this.setData({ isPlusMenuVisible: !!e?.detail?.visible });
   },
 
-  onTapSimulateImage() {
+  onTapChooseImage() {
     const sessionId = this.data.sessionId;
     if (!sessionId) return;
 
     this.setData({ isPlusMenuVisible: false });
 
-    api
-      .sendAttachmentMessage(sessionId, 'image', { name: 'demo.jpg' })
-      .then((message) => {
-        this.appendMessageAndScroll(message);
-      })
-      .catch((err) => {
-        console.error('Failed to send image:', err);
-        wx.showToast({ title: '发送失败', icon: 'none' });
-      });
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sourceType: ['album', 'camera'],
+      success: (res) => {
+        const tempFile = res.tempFiles[0];
+        if (!tempFile) return;
+
+        wx.showLoading({ title: '上传中...' });
+
+        api
+          .uploadFile(tempFile.tempFilePath)
+          .then((uploadRes) => {
+            wx.hideLoading();
+            return api.sendAttachmentMessage(sessionId, 'image', {
+              name: uploadRes.name,
+              sizeBytes: uploadRes.sizeBytes,
+              url: uploadRes.url,
+            });
+          })
+          .then((message) => {
+            this.appendMessageAndScroll(message);
+          })
+          .catch((err) => {
+            wx.hideLoading();
+            console.error('Failed to send image:', err);
+            wx.showToast({ title: '发送失败', icon: 'none' });
+          });
+      },
+      fail: (err) => {
+        if (err.errMsg && !err.errMsg.includes('cancel')) {
+          console.error('Choose image failed:', err);
+        }
+      },
+    });
   },
 
-  onTapSimulateFile() {
+  onTapChooseFile() {
     const sessionId = this.data.sessionId;
     if (!sessionId) return;
 
     this.setData({ isPlusMenuVisible: false });
 
-    api
-      .sendAttachmentMessage(sessionId, 'file', { name: 'demo.pdf' })
-      .then((message) => {
-        this.appendMessageAndScroll(message);
-      })
-      .catch((err) => {
-        console.error('Failed to send file:', err);
-        wx.showToast({ title: '发送失败', icon: 'none' });
-      });
+    wx.chooseMessageFile({
+      count: 1,
+      type: 'file',
+      success: (res) => {
+        const tempFile = res.tempFiles[0];
+        if (!tempFile) return;
+
+        wx.showLoading({ title: '上传中...' });
+
+        api
+          .uploadFile(tempFile.path)
+          .then((uploadRes) => {
+            wx.hideLoading();
+            return api.sendAttachmentMessage(sessionId, 'file', {
+              name: uploadRes.name,
+              sizeBytes: uploadRes.sizeBytes,
+              url: uploadRes.url,
+            });
+          })
+          .then((message) => {
+            this.appendMessageAndScroll(message);
+          })
+          .catch((err) => {
+            wx.hideLoading();
+            console.error('Failed to send file:', err);
+            wx.showToast({ title: '发送失败', icon: 'none' });
+          });
+      },
+      fail: (err) => {
+        if (err.errMsg && !err.errMsg.includes('cancel')) {
+          console.error('Choose file failed:', err);
+        }
+      },
+    });
   },
 
   onTapEndSession() {

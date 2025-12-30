@@ -1,6 +1,8 @@
 {
   "darkmode": true,
   "pages": [
+    "pages/linkbridge/login/login",
+    "pages/linkbridge/register/register",
     "pages/linkbridge/dashboard/dashboard",
     "pages/linkbridge/search/search",
     "pages/linkbridge/settings/settings",

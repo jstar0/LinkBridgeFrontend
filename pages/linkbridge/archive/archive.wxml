@@ -1,8 +1,34 @@
 <view class="lb-page">
-  <t-navbar title="历史归档" leftArrow />
+  <t-navbar title="历史归档" left-arrow bind:go-back="onGoBack" />
 
   <view class="lb-page__content">
-    <t-empty description="归档页占位" />
+    <view wx:if="{{loading}}" class="lb-archive__loading">
+      <t-loading theme="circular" size="40rpx" />
+      <text class="lb-archive__loading-text">加载中...</text>
+    </view>
+
+    <view wx:elif="{{archivedSessions.length === 0}}" class="lb-archive__empty">
+      <t-empty description="暂无归档会话" />
+    </view>
+
+    <view wx:else class="lb-archive__list">
+      <t-cell-group bordered="{{false}}">
+        <t-cell
+          wx:for="{{archivedSessions}}"
+          wx:key="id"
+          title="{{item.peer.displayName}}"
+          description="{{item.lastMessagePreview}}"
+          note="{{item.timeText}}"
+          hover
+          bind:tap="onTapSession"
+          data-session-id="{{item.id}}"
+          data-peer="{{item.peer}}"
+        >
+          <view slot="left-icon" class="lb-archive__avatar-wrapper">
+            <t-avatar icon="user" shape="round" />
+          </view>
+        </t-cell>
+      </t-cell-group>
+    </view>
   </view>
 </view>
-

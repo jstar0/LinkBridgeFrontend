@@ -14,7 +14,7 @@
 
   <view class="lb-page__content">
     <view class="lb-dashboard__search">
-      <t-search placeholder="搜索" value="{{searchValue}}" bind:change="onSearchChange" />
+      <t-search placeholder="搜索用户" value="{{searchValue}}" bind:change="onSearchChange" bind:submit="onSearchSubmit" />
     </view>
 
     <view wx:if="{{activeSessions.length > 0}}" class="lb-dashboard__sessions">
@@ -22,19 +22,18 @@
         <t-cell
           wx:for="{{activeSessions}}"
           wx:key="id"
-          title="{{item.displayName}}"
+          title="{{item.peer.displayName}}"
           description="{{item.lastMessagePreview}}"
           hover
           bind:tap="onTapSession"
           data-session-id="{{item.id}}"
-          data-peer-name="{{item.peerName}}"
+          data-peer="{{item.peer}}"
         >
           <view slot="left-icon" class="lb-dashboard__avatar-wrapper">
             <t-avatar icon="user" shape="round" />
           </view>
           <view slot="note" class="lb-dashboard__cell-note">
             <text class="lb-dashboard__time">{{item.timeText}}</text>
-            <t-badge wx:if="{{item.unreadCount > 0}}" count="{{item.unreadCount}}" />
           </view>
         </t-cell>
       </t-cell-group>
@@ -45,7 +44,7 @@
 
   <t-fab
     icon="qrcode"
-    aria-label="我的二维码"
+    aria-label="我的信息"
     usingCustomNavbar
     customStyle="bottom: 220px;"
     button-props="{{myQrFabButtonProps}}"
@@ -53,11 +52,11 @@
   />
 
   <t-fab
-    icon="scan"
-    aria-label="扫一扫"
+    icon="search"
+    aria-label="搜索用户"
     usingCustomNavbar
     customStyle="bottom: 140px;"
-    bind:click="onTapScan"
+    bind:click="onTapSearch"
   />
 
   <t-popup
@@ -69,7 +68,7 @@
   >
     <view class="lb-connection-modal">
       <view class="lb-connection-modal__header">
-        <text class="lb-connection-modal__title">我的名片</text>
+        <text class="lb-connection-modal__title">我的信息</text>
         <t-icon
           class="lb-connection-modal__close"
           name="close"
@@ -80,11 +79,22 @@
         />
       </view>
 
-      <view class="lb-connection-modal__qr">
-        <t-icon name="qrcode" size="80rpx" aria-label="二维码占位" />
+      <view class="lb-connection-modal__info" wx:if="{{currentUser}}">
+        <view class="lb-connection-modal__row">
+          <text class="lb-connection-modal__label">用户名</text>
+          <text class="lb-connection-modal__value">{{currentUser.username}}</text>
+        </view>
+        <view class="lb-connection-modal__row">
+          <text class="lb-connection-modal__label">显示名称</text>
+          <text class="lb-connection-modal__value">{{currentUser.displayName}}</text>
+        </view>
+        <view class="lb-connection-modal__row">
+          <text class="lb-connection-modal__label">用户ID</text>
+          <text class="lb-connection-modal__value lb-connection-modal__id" bind:tap="onCopyUserId">{{currentUser.id}}</text>
+        </view>
       </view>
 
-      <view class="lb-connection-modal__hint">扫码即可建立会话</view>
+      <view class="lb-connection-modal__hint">点击用户ID可复制，分享给好友添加</view>
     </view>
   </t-popup>
 

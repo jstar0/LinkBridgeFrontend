@@ -1,0 +1,50 @@
+<view class="container">
+  <t-navbar title="登录" left-arrow="{{false}}" />
+
+  <view class="form-container">
+    <view class="logo-section">
+      <view class="logo-text">LinkBridge</view>
+      <view class="logo-subtitle">校园即时通讯</view>
+    </view>
+
+    <view class="form-section">
+      <t-input
+        label="用户名"
+        placeholder="请输入用户名"
+        value="{{username}}"
+        bind:change="onUsernameChange"
+        clearable
+      />
+      <t-input
+        label="密码"
+        placeholder="请输入密码"
+        type="{{showPassword ? 'text' : 'password'}}"
+        value="{{password}}"
+        bind:change="onPasswordChange"
+        clearable
+        suffixIcon="{{showPassword ? 'browse' : 'browse-off'}}"
+        bind:click="onTogglePassword"
+      />
+    </view>
+
+    <view class="error-message" wx:if="{{errorMessage}}">
+      {{errorMessage}}
+    </view>
+
+    <view class="button-section">
+      <t-button
+        theme="primary"
+        block
+        loading="{{loading}}"
+        disabled="{{!canSubmit}}"
+        bind:tap="onTapLogin"
+      >
+        登录
+      </t-button>
+    </view>
+
+    <view class="link-section">
+      <text class="link-text" bind:tap="onTapRegister">没有账号？去注册</text>
+    </view>
+  </view>
+</view>

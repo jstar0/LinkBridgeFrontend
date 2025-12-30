@@ -1,10 +1,49 @@
 <view class="lb-page">
-  <t-navbar title="搜索" />
+  <t-navbar title="搜索用户" left-arrow bind:go-back="onGoBack" />
 
   <view class="lb-page__content">
-    <t-empty description="搜索页占位" />
+    <view class="lb-search__input">
+      <t-search
+        placeholder="输入用户名或显示名称"
+        value="{{searchValue}}"
+        bind:change="onSearchChange"
+        bind:submit="onSearchSubmit"
+        focus="{{autoFocus}}"
+      />
+    </view>
+
+    <view wx:if="{{loading}}" class="lb-search__loading">
+      <t-loading theme="circular" size="40rpx" />
+      <text class="lb-search__loading-text">搜索中...</text>
+    </view>
+
+    <view wx:elif="{{searched && users.length === 0}}" class="lb-search__empty">
+      <t-empty description="{{hint || '未找到匹配的用户'}}" />
+    </view>
+
+    <view wx:elif="{{users.length > 0}}" class="lb-search__results">
+      <t-cell-group bordered="{{false}}">
+        <t-cell
+          wx:for="{{users}}"
+          wx:key="id"
+          title="{{item.displayName}}"
+          description="@{{item.username}}"
+          hover
+          bind:tap="onTapUser"
+          data-user="{{item}}"
+        >
+          <view slot="left-icon" class="lb-search__avatar-wrapper">
+            <t-avatar icon="user" shape="round" />
+          </view>
+          <view slot="note">
+            <t-button size="small" theme="primary" variant="outline">发消息</t-button>
+          </view>
+        </t-cell>
+      </t-cell-group>
+    </view>
+
+    <view wx:elif="{{!searched}}" class="lb-search__hint">
+      <text class="lb-search__hint-text">输入用户名或显示名称搜索</text>
+    </view>
   </view>
-
-  <linkbridge-tabbar value="search" />
 </view>
-
