@@ -5,24 +5,19 @@
   },
   "subpackages": [
     {
-      "root": "pages/my/info-edit",
-      "name": "edit",
+      "root": "pages/chat",
+      "name": "chat",
       "pages": ["index"]
     },
     {
-      "root": "pages/chat",
-      "name": "chat",
+      "root": "pages/invite",
+      "name": "invite",
       "pages": ["index"]
     },
     {
       "root": "pages/login",
       "name": "login",
       "pages": ["login"]
-    },
-    {
-      "root": "pages/setting",
-      "name": "setting",
-      "pages": ["index"]
     },
     {
       "root": "pages/call",

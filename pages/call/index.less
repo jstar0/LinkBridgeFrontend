@@ -1,21 +1,32 @@
+@import '/variable.less';
+
 .page.call {
   min-height: 100vh;
-  background: #f5f5f5;
-}
-
-.call__content {
-  padding: 32rpx;
+  background: @bg-color;
+  padding: 48rpx 32rpx;
+  box-sizing: border-box;
 }
 
 .call__title {
-  font-size: 34rpx;
+  margin-top: 24rpx;
+  text-align: center;
+  font-size: 40rpx;
   font-weight: 600;
   color: rgba(0, 0, 0, 0.9);
 }
 
-.call__desc {
-  margin-top: 16rpx;
+.call__status {
+  margin-top: 24rpx;
+  text-align: center;
   font-size: 28rpx;
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.call__actions {
+  margin-top: 64rpx;
+  display: flex;
+  gap: 24rpx;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 

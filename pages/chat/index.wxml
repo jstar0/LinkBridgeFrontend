@@ -1,6 +1,10 @@
 <wxs src="./index.wxs" module="utils" />
 
-<t-navbar class="nav-bar" title="{{ name }}" left-arrow />
+<t-navbar class="nav-bar" title="{{ name }}" left-arrow>
+  <view slot="right" class="chat-nav__right">
+    <t-icon name="call" size="48rpx" bind:tap="onTapVoiceCall" />
+  </view>
+</t-navbar>
 
 <view class="chat-container">
   <scroll-view class="content" scroll-y scroll-into-view="{{ anchor }}">

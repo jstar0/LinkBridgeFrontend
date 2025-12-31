@@ -1,85 +1,111 @@
-import request from '~/api/request';
+const api = require('../../utils/linkbridge/api');
+
+function getInputValue(e) {
+  if (!e) return '';
+  if (e.detail && typeof e.detail.value === 'string') return e.detail.value;
+  if (typeof e.detail === 'string') return e.detail;
+  return '';
+}
+
+function computeCanSubmit(mode, username, displayName, password) {
+  const u = (username || '').trim();
+  const dn = (displayName || '').trim();
+  const p = password || '';
+  if (!u || !p) return false;
+  if (mode === 'register' && !dn) return false;
+  return true;
+}
 
 Page({
   data: {
-    phoneNumber: '',
-    isPhoneNumber: false,
-    isCheck: false,
-    isSubmit: false,
-    isPasswordLogin: false,
-    passwordInfo: {
-      account: '',
-      password: '',
-    },
-    radioValue: '',
+    mode: 'login', // login | register
+    username: '',
+    displayName: '',
+    password: '',
+    loading: false,
+    canSubmit: false,
+    errorMessage: '',
   },
 
-  /* 自定义功能函数 */
-  changeSubmit() {
-    if (this.data.isPasswordLogin) {
-      if (this.data.passwordInfo.account !== '' && this.data.passwordInfo.password !== '' && this.data.isCheck) {
-        this.setData({ isSubmit: true });
-      } else {
-        this.setData({ isSubmit: false });
-      }
-    } else if (this.data.isPhoneNumber && this.data.isCheck) {
-      this.setData({ isSubmit: true });
-    } else {
-      this.setData({ isSubmit: false });
+  onShow() {
+    if (api.isLoggedIn()) {
+      wx.switchTab({ url: '/pages/my/index' });
     }
   },
 
-  // 手机号变更
-  onPhoneInput(e) {
-    const isPhoneNumber = /^[1][3,4,5,7,8,9][0-9]{9}$/.test(e.detail.value);
-    this.setData({
-      isPhoneNumber,
-      phoneNumber: e.detail.value,
-    });
-    this.changeSubmit();
+  toggleMode() {
+    const next = this.data.mode === 'login' ? 'register' : 'login';
+    const canSubmit = computeCanSubmit(next, this.data.username, this.data.displayName, this.data.password);
+    this.setData({ mode: next, canSubmit, errorMessage: '' });
   },
 
-  // 用户协议选择变更
-  onCheckChange(e) {
-    const { value } = e.detail;
+  onUsernameChange(e) {
+    const username = getInputValue(e);
     this.setData({
-      radioValue: value,
-      isCheck: value === 'agree',
+      username,
+      errorMessage: '',
+      canSubmit: computeCanSubmit(this.data.mode, username, this.data.displayName, this.data.password),
     });
-    this.changeSubmit();
   },
 
-  onAccountChange(e) {
-    this.setData({ passwordInfo: { ...this.data.passwordInfo, account: e.detail.value } });
-    this.changeSubmit();
+  onDisplayNameChange(e) {
+    const displayName = getInputValue(e);
+    this.setData({
+      displayName,
+      errorMessage: '',
+      canSubmit: computeCanSubmit(this.data.mode, this.data.username, displayName, this.data.password),
+    });
   },
 
   onPasswordChange(e) {
-    this.setData({ passwordInfo: { ...this.data.passwordInfo, password: e.detail.value } });
-    this.changeSubmit();
+    const password = getInputValue(e);
+    this.setData({
+      password,
+      errorMessage: '',
+      canSubmit: computeCanSubmit(this.data.mode, this.data.username, this.data.displayName, password),
+    });
   },
 
-  // 切换登录方式
-  changeLogin() {
-    this.setData({ isPasswordLogin: !this.data.isPasswordLogin, isSubmit: false });
-  },
+  onSubmit() {
+    if (this.data.loading) return;
 
-  async login() {
-    if (this.data.isPasswordLogin) {
-      const res = await request('/login/postPasswordLogin', 'post', { data: this.data.passwordInfo });
-      if (res.success) {
-        await wx.setStorageSync('access_token', res.data.token);
-        wx.switchTab({
-          url: `/pages/my/index`,
-        });
-      }
-    } else {
-      const res = await request('/login/getSendMessage', 'get');
-      if (res.success) {
-        wx.navigateTo({
-          url: `/pages/loginCode/loginCode?phoneNumber=${this.data.phoneNumber}`,
-        });
-      }
+    const username = (this.data.username || '').trim();
+    const password = this.data.password || '';
+    const displayName = (this.data.displayName || '').trim();
+
+    if (!computeCanSubmit(this.data.mode, username, displayName, password)) {
+      this.setData({ errorMessage: '请填写完整信息' });
+      return;
     }
+
+    this.setData({ loading: true, errorMessage: '' });
+
+    const action =
+      this.data.mode === 'login' ? api.login(username, password) : api.register(username, password, displayName);
+
+    action
+      .then(() => {
+        // If user scanned an invite before login, handle it immediately.
+        try {
+          const pending = wx.getStorageSync('lb_pending_invite_code') || '';
+          if (pending) {
+            wx.removeStorageSync('lb_pending_invite_code');
+            wx.reLaunch({ url: `/pages/invite/index?c=${encodeURIComponent(pending)}` });
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        wx.switchTab({ url: '/pages/my/index' });
+      })
+      .catch((err) => {
+        let message = this.data.mode === 'login' ? '登录失败' : '注册失败';
+        if (err?.code === 'INVALID_CREDENTIALS') message = '用户名或密码错误';
+        if (err?.code === 'USERNAME_EXISTS') message = '用户名已存在';
+        if (err?.code === 'network') message = '网络错误，请检查网络连接';
+        if (err?.message) message = err.message;
+        this.setData({ errorMessage: message, loading: false });
+      });
   },
 });

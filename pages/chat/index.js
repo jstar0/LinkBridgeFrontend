@@ -1,84 +1,156 @@
-// pages/chat/index.js
-const app = getApp();
-const { socket } = app.globalData; // 获取已连接的socketTask
+const api = require('../../utils/linkbridge/api');
+
+function buildViewMessage(msg, myUserId) {
+  const senderId = msg?.senderId || '';
+  const text = msg?.text || '';
+  return {
+    messageId: msg?.id || null,
+    from: senderId && myUserId && senderId === myUserId ? 0 : 1,
+    content: text,
+    time: msg?.createdAtMs || Date.now(),
+  };
+}
 
 Page({
-  /** 页面的初始数据 */
   data: {
-    myAvatar: '/static/chat/avatar.png', // 自己的头像
-    userId: null, // 对方userId
-    avatar: '', // 对方头像
-    name: '', // 对方昵称
-    messages: [], // 消息列表 { messageId, from, content, time, read }
-    input: '', // 输入框内容
-    anchor: '', // 消息列表滚动到 id 与之相同的元素的位置
-    keyboardHeight: 0, // 键盘当前高度(px)
+    myAvatar: '/static/chat/avatar.png',
+    sessionId: '',
+    peerUserId: '',
+    avatar: '/static/chat/avatar.png',
+    name: '会话',
+    messages: [],
+    input: '',
+    anchor: '',
+    keyboardHeight: 0,
+    loading: false,
+    myUserId: '',
   },
 
-  /** 生命周期函数--监听页面加载 */
   onLoad(options) {
-    this.getOpenerEventChannel().on('update', this.update);
+    const sessionId = (options?.sessionId || '').trim();
+    const peerName = options?.peerName ? decodeURIComponent(options.peerName) : '';
+    const peerUserId = options?.peerUserId ? decodeURIComponent(options.peerUserId) : '';
+
+    if (!sessionId) {
+      wx.showToast({ title: '缺少会话ID', icon: 'none' });
+      wx.navigateBack();
+      return;
+    }
+
+    if (!api.isLoggedIn()) {
+      wx.reLaunch({ url: '/pages/login/login' });
+      return;
+    }
+
+    const cachedMe = api.getUser();
+    this.setData({
+      sessionId,
+      peerUserId,
+      name: peerName || '会话',
+      myUserId: cachedMe?.id || '',
+    });
+
+    api.connectWebSocket();
+    this.loadMessages();
+
+    this.wsHandler = (env) => {
+      if (env?.type !== 'message.created') return;
+      const msg = env?.payload?.message;
+      if (!msg || msg.sessionId !== this.data.sessionId) return;
+
+      const incomingID = msg?.id || '';
+      if (incomingID && this.data.messages.some((m) => m.messageId === incomingID)) return;
+
+      const myId = this.data.myUserId || api.getUser()?.id || '';
+      const vm = buildViewMessage(msg, myId);
+      this.setData({ messages: [...this.data.messages, vm] });
+      wx.nextTick(this.scrollToBottom);
+    };
+    api.addWebSocketHandler(this.wsHandler);
+
+    // Ensure we have userId for sender mapping.
+    if (!this.data.myUserId) {
+      api
+        .getMe()
+        .then((me) => {
+          api.setUser(me);
+          this.setData({ myUserId: me?.id || '' });
+        })
+        .catch(() => null);
+    }
   },
 
-  /** 生命周期函数--监听页面初次渲染完成 */
-  onReady() {},
-
-  /** 生命周期函数--监听页面显示 */
-  onShow() {},
-
-  /** 生命周期函数--监听页面隐藏 */
-  onHide() {},
-
-  /** 生命周期函数--监听页面卸载 */
   onUnload() {
-    app.eventBus.off('update', this.update);
+    if (this.wsHandler) api.removeWebSocketHandler(this.wsHandler);
   },
 
-  /** 页面相关事件处理函数--监听用户下拉动作 */
-  onPullDownRefresh() {},
-
-  /** 页面上拉触底事件的处理函数 */
-  onReachBottom() {},
-
-  /** 用户点击右上角分享 */
-  onShareAppMessage() {},
-
-  /** 更新数据 */
-  update({ userId, avatar, name, messages }) {
-    this.setData({ userId, avatar, name, messages: [...messages] });
-    wx.nextTick(this.scrollToBottom);
+  loadMessages() {
+    this.setData({ loading: true });
+    api
+      .listMessages(this.data.sessionId)
+      .then((res) => {
+        const myId = this.data.myUserId || api.getUser()?.id || '';
+        const vms = (res?.messages || []).map((m) => buildViewMessage(m, myId));
+        this.setData({ messages: vms, loading: false });
+        wx.nextTick(this.scrollToBottom);
+      })
+      .catch(() => {
+        this.setData({ loading: false });
+        wx.showToast({ title: '加载失败', icon: 'none' });
+      });
   },
 
-  /** 处理唤起键盘事件 */
   handleKeyboardHeightChange(event) {
-    const { height } = event.detail;
+    const height = event?.detail?.height || 0;
     if (!height) return;
     this.setData({ keyboardHeight: height });
     wx.nextTick(this.scrollToBottom);
   },
 
-  /** 处理收起键盘事件 */
   handleBlur() {
     this.setData({ keyboardHeight: 0 });
   },
 
-  /** 处理输入事件 */
   handleInput(event) {
-    this.setData({ input: event.detail.value });
+    this.setData({ input: event?.detail?.value || '' });
   },
 
-  /** 发送消息 */
   sendMessage() {
-    const { userId, messages, input: content } = this.data;
+    const content = (this.data.input || '').trim();
     if (!content) return;
-    const message = { messageId: null, from: 0, content, time: Date.now(), read: true };
-    messages.push(message);
-    this.setData({ input: '', messages });
-    socket.send(JSON.stringify({ type: 'message', data: { userId, content } }));
-    wx.nextTick(this.scrollToBottom);
+
+    this.setData({ input: '' });
+
+    api
+      .sendTextMessage(this.data.sessionId, content)
+      .then((msg) => {
+        const myId = this.data.myUserId || api.getUser()?.id || '';
+        const vm = buildViewMessage(msg, myId);
+        const id = vm?.messageId || '';
+        if (id && this.data.messages.some((m) => m.messageId === id)) return;
+        this.setData({ messages: [...this.data.messages, vm] });
+        wx.nextTick(this.scrollToBottom);
+      })
+      .catch(() => {
+        wx.showToast({ title: '发送失败', icon: 'none' });
+      });
   },
 
-  /** 消息列表滚动到底部 */
+  onTapVoiceCall() {
+    const peerUserId = this.data.peerUserId || '';
+    const peerName = this.data.name || '';
+    if (!peerUserId) {
+      wx.showToast({ title: '缺少对方信息', icon: 'none' });
+      return;
+    }
+
+    const url =
+      `/pages/call/index?peerUserId=${encodeURIComponent(peerUserId)}` +
+      `&mediaType=voice` +
+      (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '');
+    wx.navigateTo({ url });
+  },
+
   scrollToBottom() {
     this.setData({ anchor: 'bottom' });
   },

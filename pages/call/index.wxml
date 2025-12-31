@@ -1,8 +1,14 @@
-<t-navbar title="语音通话" left-arrow />
+<t-navbar title="{{navbarTitle}}" left-arrow bind:go-back="onTapBack" />
+
 <view class="page call">
-  <view class="call__content">
-    <view class="call__title">通话页面待接入</view>
-    <view class="call__desc">后续会把 LinkBridge 的 1v1 语音通话迁移到这里。</view>
+  <view class="call__title">{{peerDisplayName || '通话'}}</view>
+  <view class="call__status">{{statusText}}</view>
+
+  <view class="call__actions">
+    <t-button wx:if="{{showAccept}}" theme="primary" shape="round" content="接听" bind:tap="onTapAccept" />
+    <t-button wx:if="{{showReject}}" theme="danger" shape="round" content="拒绝" bind:tap="onTapReject" />
+    <t-button wx:if="{{showCancel}}" theme="default" variant="outline" shape="round" content="取消" bind:tap="onTapCancel" />
+    <t-button wx:if="{{showHangup}}" theme="danger" shape="round" content="挂断" bind:tap="onTapHangup" />
   </view>
 </view>
 

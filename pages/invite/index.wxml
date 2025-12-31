@@ -1,0 +1,13 @@
+<t-navbar title="建立会话" left-arrow />
+
+<view class="page invite">
+  <view wx:if="{{loading}}" class="invite__loading">
+    <t-loading theme="circular" size="40rpx" />
+    <view class="invite__loading-text">正在建立会话...</view>
+  </view>
+
+  <view wx:elif="{{errorMessage}}" class="invite__error">
+    <t-empty description="{{errorMessage}}" />
+  </view>
+</view>
+
