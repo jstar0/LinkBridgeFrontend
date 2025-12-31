@@ -1,9 +1,5 @@
 function getBaseUrl() {
-  try {
-    return wx.getStorageSync('lb_base_url') || 'http://103.40.13.96:8081';
-  } catch (e) {
-    return 'http://103.40.13.96:8081';
-  }
+  return 'http://103.40.13.96:8081';
 }
 
 function getWsUrl() {
@@ -131,6 +127,10 @@ function getMe() {
 
 function getUserById(userId) {
   return request('GET', `/v1/users/${encodeURIComponent(userId)}`).then((res) => res.user);
+}
+
+function updateDisplayName(displayName) {
+  return request('PUT', '/v1/users/me', { displayName }).then((res) => res.user);
 }
 
 function listSessions(status = 'active') {
@@ -314,6 +314,7 @@ module.exports = {
   logout,
   getMe,
   getUserById,
+  updateDisplayName,
   listSessions,
   createSession,
   archiveSession,

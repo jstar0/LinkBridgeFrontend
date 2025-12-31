@@ -1,5 +1,13 @@
 const api = require('../../utils/linkbridge/api');
 
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch (e) {
+    return String(value || '');
+  }
+}
+
 function parseQueryString(qs) {
   const out = {};
   if (!qs) return out;
@@ -24,7 +32,7 @@ function extractInviteCodeFromPath(path) {
   const query = parseQueryString(parts.slice(1).join('?'));
   if (query.c) return String(query.c);
   if (!query.scene) return '';
-  const scene = parseQueryString(String(query.scene));
+  const scene = parseQueryString(safeDecodeURIComponent(String(query.scene)));
   return scene.c ? String(scene.c) : '';
 }
 
@@ -32,7 +40,7 @@ Component({
   data: {
     popupVisible: false,
     isLoggedIn: false,
-    qrUrl: '',
+    qrImagePath: '',
   },
 
   lifetimes: {
@@ -46,13 +54,57 @@ Component({
       const loggedIn = api.isLoggedIn();
       this.setData({
         isLoggedIn: loggedIn,
-        qrUrl: loggedIn ? api.getMySessionQrImageUrl(Date.now()) : '',
+        qrImagePath: loggedIn ? this.data.qrImagePath : '',
+      });
+    },
+
+    loadQrImage() {
+      if (!api.isLoggedIn()) {
+        this.setData({ qrImagePath: '' });
+        return Promise.resolve();
+      }
+
+      const token = api.getToken();
+      if (!token) {
+        this.setData({ qrImagePath: '' });
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve, reject) => {
+        wx.request({
+          url: `${api.getBaseUrl()}/v1/wechat/qrcode/session`,
+          method: 'GET',
+          header: { Authorization: `Bearer ${token}` },
+          responseType: 'arraybuffer',
+          success: (res) => {
+            if (res.statusCode !== 200) {
+              reject(new Error(`HTTP ${res.statusCode}`));
+              return;
+            }
+            const fs = wx.getFileSystemManager();
+            const filePath = `${wx.env.USER_DATA_PATH}/lb_session_qr.png`;
+            fs.writeFile({
+              filePath,
+              data: res.data,
+              encoding: 'binary',
+              success: () => {
+                this.setData({ qrImagePath: filePath });
+                resolve();
+              },
+              fail: (err) => reject(err),
+            });
+          },
+          fail: (err) => reject(err),
+        });
       });
     },
 
     onOpen() {
       this.refresh();
       this.setData({ popupVisible: true });
+      this.loadQrImage().catch(() => {
+        wx.showToast({ title: '二维码加载失败', icon: 'none' });
+      });
     },
 
     onClose() {

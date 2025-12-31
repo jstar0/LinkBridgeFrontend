@@ -1,85 +1,99 @@
+import useToastBehavior from '~/behaviors/useToast';
+
 const api = require('../../utils/linkbridge/api');
 
+const DEFAULT_SERVICE = [
+  { image: '/static/icon_wx.png', name: '微信', type: 'weixin', url: '' },
+  { image: '/static/icon_qq.png', name: 'QQ', type: 'QQ', url: '' },
+  { image: '/static/icon_doc.png', name: '腾讯文档', type: 'document', url: '' },
+  { image: '/static/icon_map.png', name: '腾讯地图', type: 'map', url: '' },
+  { image: '/static/icon_td.png', name: '数据中心', type: 'data', url: '' },
+  { image: '/static/icon_td.png', name: '数据中心', type: 'data', url: '' },
+  { image: '/static/icon_td.png', name: '数据中心', type: 'data', url: '' },
+  { image: '/static/icon_td.png', name: '数据中心', type: 'data', url: '' },
+];
+
 Page({
+  behaviors: [useToastBehavior],
+
   data: {
-    isLoggedIn: false,
-    me: { id: '', username: '', displayName: '' },
-    serverUrl: '',
-    serverPopupVisible: false,
-    serverUrlInput: '',
+    isLoad: false,
+    service: DEFAULT_SERVICE,
+    personalInfo: {},
+    gridList: [
+      { name: '全部发布', icon: 'root-list', type: 'all', url: '' },
+      { name: '审核中', icon: 'search', type: 'progress', url: '' },
+      { name: '已发布', icon: 'upload', type: 'published', url: '' },
+      { name: '草稿箱', icon: 'file-copy', type: 'draft', url: '' },
+    ],
+    settingList: [
+      { name: '联系客服', icon: 'service', type: 'service' },
+      { name: '设置', icon: 'setting', type: 'setting', url: '' },
+      { name: '退出登录', icon: 'logout', type: 'logout', url: '' },
+    ],
   },
 
+  onLoad() {},
+
   onShow() {
-    const loggedIn = api.isLoggedIn();
-
-    const currentServer = api.getBaseUrl();
-
-    this.setData({ isLoggedIn: loggedIn, serverUrl: currentServer });
-    if (!loggedIn) return;
+    if (!api.isLoggedIn()) {
+      this.setData({ isLoad: false, personalInfo: {} });
+      return;
+    }
 
     api
       .getMe()
       .then((me) => {
-        api.setUser(me);
-        this.setData({ me: me || { id: '', username: '', displayName: '' } });
+        const username = me?.username || '';
+        const displayName = me?.displayName || '用户';
+        const avatarUrl = me?.avatarUrl || '/static/avatar1.png';
+
+        this.setData({
+          isLoad: true,
+          personalInfo: {
+            image: avatarUrl,
+            name: displayName,
+            star: username ? `@${username}` : ' ',
+            city: 'LinkBridge',
+          },
+        });
       })
-      .catch(() => null);
-  },
-
-  onTapLogin() {
-    wx.navigateTo({ url: '/pages/login/login' });
-  },
-
-  onTapLogout() {
-    wx.showLoading({ title: '退出中...' });
-    api
-      .logout()
-      .catch(() => null)
-      .then(() => {
-        wx.hideLoading();
-        wx.reLaunch({ url: '/pages/login/login' });
+      .catch(() => {
+        this.setData({ isLoad: false, personalInfo: {} });
       });
   },
 
-  onTapServer() {
-    const current = api.getBaseUrl();
-    this.setData({ serverPopupVisible: true, serverUrlInput: current });
+  onLogin() {
+    wx.navigateTo({ url: '/pages/login/login' });
   },
 
-  onCloseServerPopup() {
-    this.setData({ serverPopupVisible: false });
-  },
-
-  onServerPopupVisibleChange(e) {
-    this.setData({ serverPopupVisible: !!e?.detail?.visible });
-  },
-
-  onServerUrlChange(e) {
-    const value = e?.detail?.value || '';
-    this.setData({ serverUrlInput: value });
-  },
-
-  onSaveServerUrl() {
-    const next = (this.data.serverUrlInput || '').trim().replace(/\/+$/, '');
-    if (!next) {
-      wx.showToast({ title: '请输入地址', icon: 'none' });
+  onNavigateTo() {
+    if (!api.isLoggedIn()) {
+      wx.navigateTo({ url: '/pages/login/login' });
       return;
     }
-    if (!/^https?:\/\//i.test(next)) {
-      wx.showToast({ title: '需以 http(s):// 开头', icon: 'none' });
+    wx.navigateTo({ url: '/pages/my/info-edit/index' });
+  },
+
+  onEleClick(e) {
+    const { name, url, type } = e?.currentTarget?.dataset?.data || {};
+    if (type === 'logout') {
+      wx.showLoading({ title: '退出中...' });
+      api
+        .logout()
+        .catch(() => null)
+        .then(() => {
+          wx.hideLoading();
+          wx.reLaunch({ url: '/pages/login/login' });
+        });
       return;
     }
 
-    try {
-      wx.setStorageSync('lb_base_url', next);
-    } catch (e) {
-      wx.showToast({ title: '保存失败', icon: 'none' });
+    if (url) {
+      wx.navigateTo({ url });
       return;
     }
-
-    // Apply immediately for subsequent requests; also close WS so next connect uses the new URL.
-    api.closeWebSocket();
-    this.setData({ serverUrl: next, serverPopupVisible: false });
-    wx.showToast({ title: '已保存', icon: 'none' });
+    this.onShowToast('#t-toast', name || '暂未开放');
   },
 });
+

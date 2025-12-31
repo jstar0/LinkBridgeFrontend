@@ -1,7 +1,16 @@
 const api = require('../../../utils/linkbridge/api');
 
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch (e) {
+    return String(value || '');
+  }
+}
+
 function parseScene(scene) {
   if (!scene) return {};
+  scene = safeDecodeURIComponent(String(scene));
   const out = {};
   String(scene)
     .split('&')
@@ -27,13 +36,13 @@ Page({
 
   onLoad(options) {
     const scene = options?.scene || '';
-    const code = options?.c || parseScene(scene).c || '';
+    const code = (options?.c || '').trim() || (parseScene(scene).c || '').trim();
 
     if (!code) {
       this.setData({
         loading: false,
         title: '无效二维码',
-        desc: '未识别到邀请码，请重新扫码。',
+        desc: '未识别到邀请码（scene 解析失败），请重新扫码或让对方刷新二维码。',
         showLogin: false,
       });
       return;
@@ -82,4 +91,3 @@ Page({
     wx.switchTab({ url: '/pages/message/index' });
   },
 });
-

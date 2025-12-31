@@ -10,7 +10,13 @@
 
     <view wx:if="{{isLoggedIn}}">
       <view class="scan-fab__box">
-        <image wx:if="{{qrUrl}}" class="scan-fab__img" mode="aspectFit" src="{{qrUrl}}" show-menu-by-longpress />
+        <image
+          wx:if="{{qrImagePath}}"
+          class="scan-fab__img"
+          mode="aspectFit"
+          src="{{qrImagePath}}"
+          show-menu-by-longpress
+        />
       </view>
       <view class="scan-fab__hint">让对方扫一扫你的码即可建立会话</view>
 
@@ -47,4 +53,3 @@
     </view>
   </view>
 </t-popup>
-

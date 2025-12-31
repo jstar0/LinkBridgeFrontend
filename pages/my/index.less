@@ -10,11 +10,13 @@
     top: 0;
   }
 
-  &-card {
+  &-info,
+  &-service,
+  &-setting {
     background-color: #fff;
   }
 
-  &-card {
+  &-info {
     border-radius: 24rpx;
     margin: 8rpx 32rpx 0rpx 32rpx;
     padding-bottom: 32rpx;
@@ -29,7 +31,24 @@
       align-items: center !important;
     }
 
-    // 头像margin-right
+    .divider-class {
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    .grid-class {
+      margin-top: 40rpx;
+    }
+
+    .grid-item .t-grid-item__content {
+      padding: 0px !important;
+    }
+
+    .split-line {
+      border-right: 1px solid #e7e7e7;
+    }
+
+    // avatar margin-right
     --td-spacer-1: 32rpx;
 
     &__person {
@@ -40,70 +59,45 @@
         font-weight: 600;
       }
 
-      .sub {
-        margin-top: 8rpx;
-        font-size: 24rpx;
-        color: rgba(0, 0, 0, 0.55);
+      .tags {
+        display: flex;
+        margin-top: 16rpx;
+
+        --td-text-color-primary: #000000e6;
+        --td-tag-medium-font-size: 20rpx;
+        --td-tag-medium-icon-size: 24rpx;
+      }
+
+      .tag:not(:last-child) {
+        margin-right: 16rpx;
       }
     }
   }
 
-  .my-qr {
-    padding: 24rpx 32rpx 0 32rpx;
-  }
+  &-service {
+    border-radius: 24rpx;
+    margin: 32rpx;
+    padding-bottom: 8rpx;
+    overflow: hidden;
 
-  .my-qr__title {
-    font-size: 28rpx;
-    font-weight: 600;
-    color: rgba(0, 0, 0, 0.9);
-  }
+    &__list-item {
+      .t-grid-item__content {
+        padding-bottom: 16rpx !important;
+      }
+      .t-grid-item__text {
+        height: 40rpx !important;
+      }
+    }
 
-  .my-qr__box {
-    margin-top: 20rpx;
-    display: flex;
-    justify-content: center;
-  }
-
-  .my-qr__img {
-    width: 460rpx;
-    height: 460rpx;
-    background: #fff;
-    border-radius: 20rpx;
-  }
-
-  .my-qr__hint {
-    margin-top: 16rpx;
-    text-align: center;
-    font-size: 24rpx;
-    color: rgba(0, 0, 0, 0.6);
-  }
-
-  .my-qr__actions {
-    margin-top: 24rpx;
+    &--tips {
+      height: 44rpx;
+      line-height: 44rpx;
+      padding-left: 40rpx;
+      margin-top: 32rpx;
+      color: #000000e6;
+      font-size: 28rpx;
+      font-weight: 600;
+    }
   }
 }
 
-.my-server {
-  padding: 32rpx;
-  box-sizing: border-box;
-  background: #fff;
-  border-top-left-radius: 24rpx;
-  border-top-right-radius: 24rpx;
-}
-
-.my-server__title {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: rgba(0, 0, 0, 0.9);
-}
-
-.my-server__hint {
-  margin-top: 12rpx;
-  margin-bottom: 24rpx;
-  font-size: 24rpx;
-  color: rgba(0, 0, 0, 0.6);
-}
-
-.my-server__actions {
-  margin-top: 24rpx;
-}
