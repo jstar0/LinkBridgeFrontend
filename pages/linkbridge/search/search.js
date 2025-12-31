@@ -65,7 +65,7 @@ Page({
       });
   },
 
-  onTapUser(e) {
+  onTapMessageUser(e) {
     const user = e?.currentTarget?.dataset?.user;
     if (!user?.id) return;
 
@@ -79,7 +79,8 @@ Page({
         wx.navigateTo({
           url:
             `/pages/linkbridge/chat/chat?sessionId=${encodeURIComponent(session.id)}` +
-            `&peerName=${encodeURIComponent(session.peer.displayName)}`,
+            `&peerName=${encodeURIComponent(session.peer.displayName)}` +
+            `&peerUserId=${encodeURIComponent(user.id)}`,
         });
       })
       .catch((err) => {
@@ -91,6 +92,28 @@ Page({
         } else if (err.message) {
           message = err.message;
         }
+        wx.showToast({ title: message, icon: 'none' });
+      });
+  },
+
+  onTapAddFriend(e) {
+    const user = e?.currentTarget?.dataset?.user;
+    if (!user?.id) return;
+
+    wx.showLoading({ title: '发送申请...' });
+    api
+      .requestFriend(user.id)
+      .then(() => {
+        wx.hideLoading();
+        wx.showToast({ title: '已发送', icon: 'success' });
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        console.error('Failed to request friend:', err);
+        let message = '发送失败';
+        if (err.code === 'ALREADY_FRIENDS') message = '已是好友';
+        if (err.code === 'FRIEND_REQUEST_EXISTS') message = '已发送/对方已申请';
+        if (err.message) message = err.message;
         wx.showToast({ title: message, icon: 'none' });
       });
   },

@@ -8,17 +8,18 @@
       </view>
 
       <t-cell-group bordered="{{false}}" class="lb-settings__info">
-        <t-cell title="用户名" description="@{{currentUser.username || '...'}}" />
-        <t-cell
-          title="显示名称"
-          description="{{currentUser.displayName || '...'}}"
-          arrow
-          hover
-          bind:tap="onTapEditDisplayName"
-        />
-        <t-cell title="用户ID" description="{{currentUser.id || '...'}}" />
-      </t-cell-group>
-    </view>
+      <t-cell title="用户名" description="@{{currentUser.username || '...'}}" />
+      <t-cell
+        title="显示名称"
+        description="{{currentUser.displayName || '...'}}"
+        arrow
+        hover
+        bind:tap="onTapEditDisplayName"
+      />
+      <t-cell title="用户ID" description="{{currentUser.id || '...'}}" />
+      <t-cell title="好友" description="好友列表与申请" arrow hover bind:tap="onTapFriends" />
+    </t-cell-group>
+  </view>
 
     <view class="lb-settings__actions">
       <t-button theme="danger" variant="outline" block bind:tap="onTapLogout">

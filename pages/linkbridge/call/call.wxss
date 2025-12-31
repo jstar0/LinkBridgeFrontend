@@ -1,0 +1,32 @@
+.lb-call {
+  padding: 48rpx 32rpx;
+}
+
+.lb-call__title {
+  margin-top: 24rpx;
+  text-align: center;
+}
+
+.lb-call__title-text {
+  font-size: 40rpx;
+  font-weight: 600;
+}
+
+.lb-call__status {
+  margin-top: 24rpx;
+  text-align: center;
+}
+
+.lb-call__status-text {
+  font-size: 28rpx;
+  opacity: 0.8;
+}
+
+.lb-call__actions {
+  margin-top: 48rpx;
+  display: flex;
+  gap: 24rpx;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+

@@ -46,6 +46,18 @@ const BASE_URL = 'http://localhost:8080';  // HTTP API
 const WS_URL = 'ws://localhost:8080';      // WebSocket
 ```
 
+## 语音通话（1v1）
+
+本项目集成了微信原生实时语音能力（`wx.joinVoIPChat`），通话信令走后端 WebSocket。
+
+使用前提：
+- 后端需配置 `WECHAT_APPID` / `WECHAT_APPSECRET`，用于生成 VoIP 签名。
+- 首次登录后会自动调用 `/v1/wechat/bind` 绑定微信会话（用于签名计算）。
+
+离线来电提醒（可选）：
+- 需要在小程序后台配置“订阅消息”模板，并在后端配置 `WECHAT_CALL_SUBSCRIBE_TEMPLATE_ID`。
+- 前端 `utils/linkbridge/api.js` 中的 `CALL_SUBSCRIBE_TEMPLATE_ID` 需填入模板 ID（发起呼叫前会请求订阅授权）。
+
 ## 技术栈
 
 - 微信小程序

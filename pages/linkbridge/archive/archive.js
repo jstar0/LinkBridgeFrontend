@@ -59,9 +59,11 @@ Page({
 
     const peer = e?.currentTarget?.dataset?.peer;
     const peerName = peer?.displayName || '';
+    const peerUserId = peer?.id || '';
     const url =
       `/pages/linkbridge/chat/chat?sessionId=${encodeURIComponent(sessionId)}` +
-      (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '');
+      (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '') +
+      (peerUserId ? `&peerUserId=${encodeURIComponent(peerUserId)}` : '');
     wx.navigateTo({ url });
   },
 });

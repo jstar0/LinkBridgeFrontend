@@ -107,3 +107,32 @@
   font-size: 28rpx;
   color: var(--td-text-color-secondary);
 }
+
+.lb-connection-modal__qr {
+  margin-top: 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lb-connection-modal__qr-image {
+  width: 420rpx;
+  height: 420rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+}
+
+.lb-connection-modal__qr-placeholder {
+  width: 420rpx;
+  height: 420rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--td-bg-color-secondarycontainer);
+}
+
+.lb-connection-modal__placeholder-text {
+  font-size: 28rpx;
+  color: var(--td-text-color-secondary);
+}

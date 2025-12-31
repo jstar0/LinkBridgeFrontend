@@ -30,6 +30,7 @@ Page({
   data: {
     sessionId: '',
     peerName: '',
+    peerUserId: '',
     navbarTitle: '聊天',
     messages: [],
     inputValue: '',
@@ -51,12 +52,14 @@ Page({
 
     const sessionId = query?.sessionId || '';
     const peerName = query?.peerName || '';
+    const peerUserId = query?.peerUserId || '';
     const currentUser = api.getUser();
     const currentUserId = currentUser?.id || '';
 
     this.setData({
       sessionId,
       peerName,
+      peerUserId,
       navbarTitle: peerName || '聊天',
       currentUserId,
     });
@@ -261,5 +264,19 @@ Page({
         console.error('Failed to archive session:', err);
         wx.reLaunch({ url: '/pages/linkbridge/dashboard/dashboard' });
       });
+  },
+
+  onTapVoiceCall() {
+    const peerUserId = this.data.peerUserId;
+    if (!peerUserId) {
+      wx.showToast({ title: '无法发起通话', icon: 'none' });
+      return;
+    }
+
+    const url =
+      `/pages/linkbridge/call/call?peerUserId=${encodeURIComponent(peerUserId)}` +
+      (this.data.peerName ? `&peerName=${encodeURIComponent(this.data.peerName)}` : '') +
+      `&mediaType=voice`;
+    wx.navigateTo({ url });
   },
 });

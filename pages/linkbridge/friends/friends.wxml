@@ -1,0 +1,73 @@
+<view class="lb-page">
+  <t-navbar title="好友" left-arrow bind:go-back="onGoBack" />
+
+  <view class="lb-page__content">
+    <view wx:if="{{loading}}" class="lb-friends__loading">
+      <t-loading theme="circular" size="40rpx" />
+      <text class="lb-friends__loading-text">加载中...</text>
+    </view>
+
+    <view wx:elif="{{incomingRequests.length > 0}}" class="lb-friends__section">
+      <view class="lb-friends__section-title">
+        <text>新的好友申请</text>
+      </view>
+      <t-cell-group bordered="{{false}}">
+        <t-cell
+          wx:for="{{incomingRequests}}"
+          wx:key="id"
+          title="{{item.peer.displayName}}"
+          description="@{{item.peer.username}}"
+        >
+          <view slot="left-icon" class="lb-friends__avatar-wrapper">
+            <t-avatar icon="user" shape="round" />
+          </view>
+          <view slot="note" class="lb-friends__req-actions">
+            <t-button size="small" theme="primary" variant="outline" catch:tap="onTapAccept" data-id="{{item.id}}">
+              同意
+            </t-button>
+            <t-button
+              size="small"
+              theme="danger"
+              variant="outline"
+              catch:tap="onTapReject"
+              data-id="{{item.id}}"
+              style="margin-left: 12rpx;"
+            >
+              拒绝
+            </t-button>
+          </view>
+        </t-cell>
+      </t-cell-group>
+    </view>
+
+    <view class="lb-friends__section">
+      <view class="lb-friends__section-title">
+        <text>我的好友</text>
+      </view>
+
+      <view wx:if="{{friends.length === 0}}">
+        <t-empty description="暂无好友，可去搜索添加" />
+      </view>
+
+      <t-cell-group wx:else bordered="{{false}}">
+        <t-cell
+          wx:for="{{friends}}"
+          wx:key="id"
+          title="{{item.displayName}}"
+          description="@{{item.username}}"
+          hover
+          bind:tap="onTapChat"
+          data-user="{{item}}"
+        >
+          <view slot="left-icon" class="lb-friends__avatar-wrapper">
+            <t-avatar icon="user" shape="round" />
+          </view>
+          <view slot="note">
+            <t-button size="small" theme="primary" variant="outline">发消息</t-button>
+          </view>
+        </t-cell>
+      </t-cell-group>
+    </view>
+  </view>
+</view>
+

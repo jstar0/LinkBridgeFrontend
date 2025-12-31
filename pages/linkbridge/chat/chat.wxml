@@ -1,15 +1,13 @@
 <view class="lb-page">
   <t-navbar class="lb-chat__navbar" title="{{navbarTitle}}" leftArrow>
-    <t-button
-      slot="capsule"
-      theme="danger"
-      variant="base"
-      shape="round"
-      size="small"
-      bind:tap="onTapEndSession"
-    >
-      结束会话
-    </t-button>
+    <view slot="capsule" class="lb-chat__navbar-capsule">
+      <t-button theme="primary" variant="base" shape="round" size="small" bind:tap="onTapVoiceCall">
+        语音
+      </t-button>
+      <t-button theme="danger" variant="base" shape="round" size="small" bind:tap="onTapEndSession">
+        结束
+      </t-button>
+    </view>
   </t-navbar>
 
   <view class="lb-chat">

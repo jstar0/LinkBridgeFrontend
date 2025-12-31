@@ -52,6 +52,10 @@ Page({
     });
   },
 
+  onTapFriends() {
+    wx.navigateTo({ url: '/pages/linkbridge/friends/friends' });
+  },
+
   onEditDialogVisibleChange(e) {
     this.setData({ isEditDialogVisible: !!e?.detail?.visible });
   },

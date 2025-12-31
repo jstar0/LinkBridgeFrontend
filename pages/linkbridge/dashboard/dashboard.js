@@ -19,6 +19,7 @@ Page({
     isConnectionModalVisible: false,
     loading: false,
     currentUser: null,
+    myFriendQrUrl: '',
     myQrFabButtonProps: {
       theme: 'default',
       variant: 'outline',
@@ -103,34 +104,62 @@ Page({
 
     const peer = e?.currentTarget?.dataset?.peer;
     const peerName = peer?.displayName || '';
+    const peerUserId = peer?.id || '';
     const url =
       `/pages/linkbridge/chat/chat?sessionId=${encodeURIComponent(sessionId)}` +
-      (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '');
+      (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '') +
+      (peerUserId ? `&peerUserId=${encodeURIComponent(peerUserId)}` : '');
     wx.navigateTo({ url });
   },
 
   onTapMyQr() {
-    this.setData({ isConnectionModalVisible: true });
+    this.setData({ isConnectionModalVisible: true, myFriendQrUrl: api.getMyFriendQrImageUrl(Date.now()) });
   },
 
   onCloseConnectionModal() {
-    this.setData({ isConnectionModalVisible: false });
+    this.setData({ isConnectionModalVisible: false, myFriendQrUrl: '' });
   },
 
   onConnectionModalVisibleChange(e) {
-    this.setData({
-      isConnectionModalVisible: e.detail.visible,
-    });
+    const visible = e?.detail?.visible;
+    const patch = { isConnectionModalVisible: visible };
+    if (visible) {
+      patch.myFriendQrUrl = api.getMyFriendQrImageUrl(Date.now());
+    } else {
+      patch.myFriendQrUrl = '';
+    }
+    this.setData(patch);
   },
 
-  onCopyUserId() {
-    const userId = this.data.currentUser?.id;
-    if (!userId) return;
+  onTapScanFriend() {
+    if (typeof wx?.scanCode !== 'function') {
+      wx.showToast({ title: '当前环境不支持扫码', icon: 'none' });
+      return;
+    }
 
-    wx.setClipboardData({
-      data: userId,
-      success: () => {
-        wx.showToast({ title: '已复制', icon: 'success' });
+    wx.scanCode({
+      onlyFromCamera: true,
+      scanType: ['qrCode'],
+      success: (res) => {
+        const path = res?.path || '';
+        if (path) {
+          const url = path.startsWith('/') ? path : `/${path}`;
+          wx.navigateTo({ url });
+          return;
+        }
+
+        // Fallback: try to treat res.result as an invite code or "c=xxxx".
+        const result = (res?.result || '').trim();
+        if (!result) {
+          wx.showToast({ title: '扫码失败', icon: 'none' });
+          return;
+        }
+
+        const cleaned = result.startsWith('c=') ? result.slice(2) : result;
+        wx.navigateTo({ url: `/pages/linkbridge/add-friend/add-friend?c=${encodeURIComponent(cleaned)}` });
+      },
+      fail: () => {
+        wx.showToast({ title: '已取消', icon: 'none' });
       },
     });
   },

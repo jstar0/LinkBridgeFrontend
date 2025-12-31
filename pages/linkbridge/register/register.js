@@ -2,6 +2,28 @@ const api = require('../../../utils/linkbridge/api');
 
 const usernameRegex = /^[a-zA-Z0-9_]{4,20}$/;
 
+function getInputValue(e) {
+  if (!e) return '';
+  if (e.detail && typeof e.detail.value === 'string') return e.detail.value;
+  if (typeof e.detail === 'string') return e.detail;
+  return '';
+}
+
+function computeCanSubmit(username, displayName, password, confirmPassword) {
+  const u = username || '';
+  const dn = (displayName || '').trim();
+  const p = password || '';
+  const cp = confirmPassword || '';
+  return (
+    usernameRegex.test(u) &&
+    dn.length >= 1 &&
+    dn.length <= 20 &&
+    p.length >= 8 &&
+    p.length <= 32 &&
+    p === cp
+  );
+}
+
 Page({
   data: {
     username: '',
@@ -23,37 +45,52 @@ Page({
   },
 
   onUsernameChange(e) {
-    const username = e.detail.value || '';
+    const username = getInputValue(e);
     let usernameTip = '';
     if (username && !usernameRegex.test(username)) {
       usernameTip = '用户名需4-20位字母数字下划线';
     }
-    this.setData({ username, usernameTip, errorMessage: '' });
-    this.updateCanSubmit();
+
+    const { displayName, password, confirmPassword } = this.data;
+    this.setData({
+      username,
+      usernameTip,
+      errorMessage: '',
+      canSubmit: computeCanSubmit(username, displayName, password, confirmPassword),
+    });
   },
 
   onDisplayNameChange(e) {
-    const displayName = e.detail.value || '';
-    this.setData({ displayName, errorMessage: '' });
-    this.updateCanSubmit();
+    const displayName = getInputValue(e);
+    const { username, password, confirmPassword } = this.data;
+    this.setData({
+      displayName,
+      errorMessage: '',
+      canSubmit: computeCanSubmit(username, displayName, password, confirmPassword),
+    });
   },
 
   onPasswordChange(e) {
-    const password = e.detail.value || '';
+    const password = getInputValue(e);
     const strength = this.calculatePasswordStrength(password);
+    const { username, displayName, confirmPassword } = this.data;
     this.setData({
       password,
       passwordStrength: strength.level,
       passwordStrengthText: strength.text,
       errorMessage: '',
+      canSubmit: computeCanSubmit(username, displayName, password, confirmPassword),
     });
-    this.updateCanSubmit();
   },
 
   onConfirmPasswordChange(e) {
-    const confirmPassword = e.detail.value || '';
-    this.setData({ confirmPassword, errorMessage: '' });
-    this.updateCanSubmit();
+    const confirmPassword = getInputValue(e);
+    const { username, displayName, password } = this.data;
+    this.setData({
+      confirmPassword,
+      errorMessage: '',
+      canSubmit: computeCanSubmit(username, displayName, password, confirmPassword),
+    });
   },
 
   onTogglePassword() {
@@ -79,18 +116,6 @@ Page({
     if (score >= 4) return { level: 'strong', text: '强' };
     if (score >= 3) return { level: 'medium', text: '中' };
     return { level: 'weak', text: '弱' };
-  },
-
-  updateCanSubmit() {
-    const { username, displayName, password, confirmPassword } = this.data;
-    const canSubmit =
-      usernameRegex.test(username) &&
-      displayName.trim().length >= 1 &&
-      displayName.trim().length <= 20 &&
-      password.length >= 8 &&
-      password.length <= 32 &&
-      password === confirmPassword;
-    this.setData({ canSubmit });
   },
 
   validateForm() {

@@ -79,22 +79,24 @@
         />
       </view>
 
-      <view class="lb-connection-modal__info" wx:if="{{currentUser}}">
-        <view class="lb-connection-modal__row">
-          <text class="lb-connection-modal__label">用户名</text>
-          <text class="lb-connection-modal__value">{{currentUser.username}}</text>
-        </view>
-        <view class="lb-connection-modal__row">
-          <text class="lb-connection-modal__label">显示名称</text>
-          <text class="lb-connection-modal__value">{{currentUser.displayName}}</text>
-        </view>
-        <view class="lb-connection-modal__row">
-          <text class="lb-connection-modal__label">用户ID</text>
-          <text class="lb-connection-modal__value lb-connection-modal__id" bind:tap="onCopyUserId">{{currentUser.id}}</text>
+      <view class="lb-connection-modal__qr">
+        <image
+          wx:if="{{myFriendQrUrl}}"
+          class="lb-connection-modal__qr-image"
+          mode="aspectFit"
+          src="{{myFriendQrUrl}}"
+          show-menu-by-longpress
+        />
+        <view wx:else class="lb-connection-modal__qr-placeholder">
+          <text class="lb-connection-modal__placeholder-text">二维码生成中...</text>
         </view>
       </view>
 
-      <view class="lb-connection-modal__hint">点击用户ID可复制，分享给好友添加</view>
+      <t-button theme="primary" variant="outline" bind:tap="onTapScanFriend" style="margin-top: 24rpx; width: 100%;">
+        扫一扫加好友
+      </t-button>
+
+      <view class="lb-connection-modal__hint">让好友扫描此二维码添加你</view>
     </view>
   </t-popup>
 

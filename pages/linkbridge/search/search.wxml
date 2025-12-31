@@ -29,14 +29,25 @@
           title="{{item.displayName}}"
           description="@{{item.username}}"
           hover
-          bind:tap="onTapUser"
           data-user="{{item}}"
         >
           <view slot="left-icon" class="lb-search__avatar-wrapper">
             <t-avatar icon="user" shape="round" />
           </view>
           <view slot="note">
-            <t-button size="small" theme="primary" variant="outline">发消息</t-button>
+            <t-button size="small" theme="primary" variant="outline" catch:tap="onTapMessageUser" data-user="{{item}}">
+              发消息
+            </t-button>
+            <t-button
+              size="small"
+              theme="default"
+              variant="outline"
+              catch:tap="onTapAddFriend"
+              data-user="{{item}}"
+              style="margin-left: 12rpx;"
+            >
+              加好友
+            </t-button>
           </view>
         </t-cell>
       </t-cell-group>

@@ -1,5 +1,18 @@
 const api = require('../../../utils/linkbridge/api');
 
+function getInputValue(e) {
+  if (!e) return '';
+  if (e.detail && typeof e.detail.value === 'string') return e.detail.value;
+  if (typeof e.detail === 'string') return e.detail;
+  return '';
+}
+
+function computeCanSubmit(username, password) {
+  const u = (username || '').trim();
+  const p = password || '';
+  return u.length > 0 && p.length > 0;
+}
+
 Page({
   data: {
     username: '',
@@ -17,25 +30,19 @@ Page({
   },
 
   onUsernameChange(e) {
-    const username = e.detail.value || '';
-    this.setData({ username, errorMessage: '' });
-    this.updateCanSubmit();
+    const username = getInputValue(e);
+    const password = this.data.password || '';
+    this.setData({ username, errorMessage: '', canSubmit: computeCanSubmit(username, password) });
   },
 
   onPasswordChange(e) {
-    const password = e.detail.value || '';
-    this.setData({ password, errorMessage: '' });
-    this.updateCanSubmit();
+    const password = getInputValue(e);
+    const username = this.data.username || '';
+    this.setData({ password, errorMessage: '', canSubmit: computeCanSubmit(username, password) });
   },
 
   onTogglePassword() {
     this.setData({ showPassword: !this.data.showPassword });
-  },
-
-  updateCanSubmit() {
-    const { username, password } = this.data;
-    const canSubmit = username.trim().length > 0 && password.length > 0;
-    this.setData({ canSubmit });
   },
 
   onTapLogin() {
