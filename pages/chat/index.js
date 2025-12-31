@@ -2,11 +2,15 @@ const api = require('../../utils/linkbridge/api');
 
 function buildViewMessage(msg, myUserId) {
   const senderId = msg?.senderId || '';
+  const type = msg?.type || 'text';
   const text = msg?.text || '';
+  const meta = msg?.meta || {};
   return {
     messageId: msg?.id || null,
     from: senderId && myUserId && senderId === myUserId ? 0 : 1,
+    type,
     content: text,
+    meta,
     time: msg?.createdAtMs || Date.now(),
   };
 }
@@ -26,6 +30,7 @@ Page({
     keyboardHeight: 0,
     loading: false,
     myUserId: '',
+    sending: false,
   },
 
   onLoad(options) {
@@ -140,6 +145,168 @@ Page({
       .catch(() => {
         wx.showToast({ title: '发送失败', icon: 'none' });
       });
+  },
+
+  onTapMore() {
+    wx.showActionSheet({
+      itemList: ['发送照片', '发送文件'],
+      success: (res) => {
+        if (res.tapIndex === 0) this.sendImage();
+        if (res.tapIndex === 1) this.sendFile();
+      },
+    });
+  },
+
+  sendImage() {
+    if (this.data.sending) return;
+
+    if (typeof wx?.chooseMedia !== 'function' && typeof wx?.chooseImage !== 'function') {
+      wx.showToast({ title: '当前环境不支持选图', icon: 'none' });
+      return;
+    }
+
+    const pick = typeof wx.chooseMedia === 'function'
+      ? () =>
+          new Promise((resolve, reject) => {
+            wx.chooseMedia({
+              count: 1,
+              mediaType: ['image'],
+              sourceType: ['album', 'camera'],
+              success: (r) => resolve(r),
+              fail: (e) => reject(e),
+            });
+          })
+      : () =>
+          new Promise((resolve, reject) => {
+            wx.chooseImage({
+              count: 1,
+              sourceType: ['album', 'camera'],
+              success: (r) => resolve({ tempFiles: (r?.tempFilePaths || []).map((p) => ({ tempFilePath: p })) }),
+              fail: (e) => reject(e),
+            });
+          });
+
+    this.setData({ sending: true });
+    pick()
+      .then((r) => {
+        const file = r?.tempFiles?.[0];
+        const filePath = file?.tempFilePath || '';
+        if (!filePath) throw new Error('missing file');
+        wx.showLoading({ title: '上传中...' });
+        return api.uploadFile(filePath).then((up) => ({ up }));
+      })
+      .then(({ up }) => {
+        const meta = {
+          name: up?.name || 'image',
+          sizeBytes: up?.sizeBytes || 0,
+          url: up?.url || '',
+        };
+        return api.sendImageMessage(this.data.sessionId, meta);
+      })
+      .then((msg) => {
+        wx.hideLoading();
+        const myId = this.data.myUserId || api.getUser()?.id || '';
+        const vm = buildViewMessage(msg, myId);
+        const id = vm?.messageId || '';
+        if (id && this.data.messages.some((m) => m.messageId === id)) return;
+        this.setData({ messages: [...this.data.messages, vm], sending: false });
+        wx.nextTick(this.scrollToBottom);
+      })
+      .catch(() => {
+        wx.hideLoading();
+        this.setData({ sending: false });
+        wx.showToast({ title: '发送失败', icon: 'none' });
+      });
+  },
+
+  sendFile() {
+    if (this.data.sending) return;
+    if (typeof wx?.chooseMessageFile !== 'function') {
+      wx.showToast({ title: '当前环境不支持选择文件', icon: 'none' });
+      return;
+    }
+
+    this.setData({ sending: true });
+    new Promise((resolve, reject) => {
+      wx.chooseMessageFile({
+        count: 1,
+        type: 'file',
+        success: (r) => resolve(r),
+        fail: (e) => reject(e),
+      });
+    })
+      .then((r) => {
+        const file = r?.tempFiles?.[0];
+        const filePath = file?.path || '';
+        const name = file?.name || '';
+        if (!filePath) throw new Error('missing file');
+        wx.showLoading({ title: '上传中...' });
+        return api.uploadFile(filePath, name);
+      })
+      .then((up) => {
+        const meta = {
+          name: up?.name || 'file',
+          sizeBytes: up?.sizeBytes || 0,
+          url: up?.url || '',
+        };
+        return api.sendFileMessage(this.data.sessionId, meta);
+      })
+      .then((msg) => {
+        wx.hideLoading();
+        const myId = this.data.myUserId || api.getUser()?.id || '';
+        const vm = buildViewMessage(msg, myId);
+        const id = vm?.messageId || '';
+        if (id && this.data.messages.some((m) => m.messageId === id)) return;
+        this.setData({ messages: [...this.data.messages, vm], sending: false });
+        wx.nextTick(this.scrollToBottom);
+      })
+      .catch(() => {
+        wx.hideLoading();
+        this.setData({ sending: false });
+        wx.showToast({ title: '发送失败', icon: 'none' });
+      });
+  },
+
+  getFileUrl(meta) {
+    const url = meta?.url || '';
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    return `${api.getBaseUrl()}${url.startsWith('/') ? '' : '/'}${url}`;
+  },
+
+  onTapImageMessage(event) {
+    const url = event?.currentTarget?.dataset?.url || '';
+    const fullUrl = this.getFileUrl({ url });
+    if (!fullUrl) return;
+    wx.previewImage({ urls: [fullUrl] });
+  },
+
+  onTapFileMessage(event) {
+    const url = event?.currentTarget?.dataset?.url || '';
+    const fullUrl = this.getFileUrl({ url });
+    if (!fullUrl) return;
+
+    wx.showLoading({ title: '下载中...' });
+    wx.downloadFile({
+      url: fullUrl,
+      success: (res) => {
+        wx.hideLoading();
+        const filePath = res?.tempFilePath;
+        if (!filePath) {
+          wx.showToast({ title: '下载失败', icon: 'none' });
+          return;
+        }
+        wx.openDocument({
+          filePath,
+          showMenu: true,
+          fail: () => wx.showToast({ title: '无法打开文件', icon: 'none' }),
+        });
+      },
+      fail: () => {
+        wx.hideLoading();
+        wx.showToast({ title: '下载失败', icon: 'none' });
+      },
+    });
   },
 
   onTapVoiceCall() {

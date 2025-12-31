@@ -16,7 +16,24 @@
 
         <view wx:if="{{ item.from === 0 }}" class="message-area">
           <view class="message self">
-          <text space="nbsp">{{ item.content }}</text>
+          <block wx:if="{{ item.type === 'text' }}">
+            <text space="nbsp">{{ item.content }}</text>
+          </block>
+          <block wx:elif="{{ item.type === 'image' }}">
+            <image
+              class="msg-image"
+              mode="widthFix"
+              src="{{ utils.fileUrl(item.meta.url) }}"
+              bind:tap="onTapImageMessage"
+              data-url="{{ item.meta.url }}"
+            />
+          </block>
+          <block wx:elif="{{ item.type === 'file' }}">
+            <view class="msg-file" bind:tap="onTapFileMessage" data-url="{{ item.meta.url }}">
+              <t-icon name="file" size="40rpx" />
+              <view class="msg-file__name">{{ item.meta.name }}</view>
+            </view>
+          </block>
           <t-loading
             wx:if="{{ item.messageId === null }}"
             t-class="loading"
@@ -31,7 +48,24 @@
         <view wx:else class="message-area">
           <t-avatar image="{{ avatar }}" size="small" bind:tap="onTapPeerAvatar" />
           <view class="message other">
-          <text space="nbsp">{{ item.content }}</text>
+          <block wx:if="{{ item.type === 'text' }}">
+            <text space="nbsp">{{ item.content }}</text>
+          </block>
+          <block wx:elif="{{ item.type === 'image' }}">
+            <image
+              class="msg-image"
+              mode="widthFix"
+              src="{{ utils.fileUrl(item.meta.url) }}"
+              bind:tap="onTapImageMessage"
+              data-url="{{ item.meta.url }}"
+            />
+          </block>
+          <block wx:elif="{{ item.type === 'file' }}">
+            <view class="msg-file" bind:tap="onTapFileMessage" data-url="{{ item.meta.url }}">
+              <t-icon name="file" size="40rpx" />
+              <view class="msg-file__name">{{ item.meta.name }}</view>
+            </view>
+          </block>
           </view>
         </view>
       </block>
@@ -42,6 +76,9 @@
 
 <view class="block" style="margin-bottom: {{ keyboardHeight }}px" />
 <view class="bottom" style="margin-bottom: {{ keyboardHeight }}px">
+  <view class="more" bind:tap="onTapMore">
+    <t-icon name="add" size="44rpx" color="#00000099" />
+  </view>
   <view class="input">
     <input
       value="{{ input }}"

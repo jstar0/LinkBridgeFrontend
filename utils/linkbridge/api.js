@@ -162,6 +162,45 @@ function sendTextMessage(sessionId, text) {
   );
 }
 
+function uploadFile(filePath, name) {
+  const token = getToken();
+  if (!token) return Promise.reject({ code: 'TOKEN_REQUIRED', message: 'Not logged in' });
+  if (!filePath) return Promise.reject({ code: 'VALIDATION', message: 'missing filePath' });
+
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: `${getBaseUrl()}/v1/upload`,
+      filePath,
+      name: 'file',
+      formData: name ? { name } : undefined,
+      header: { Authorization: `Bearer ${token}` },
+      success(res) {
+        try {
+          const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+          resolve(data);
+        } catch (e) {
+          reject({ code: 'PARSE', message: 'invalid upload response' });
+        }
+      },
+      fail(err) {
+        reject({ code: 'network', message: err?.errMsg || 'upload failed' });
+      },
+    });
+  });
+}
+
+function sendImageMessage(sessionId, meta) {
+  return request('POST', `/v1/sessions/${encodeURIComponent(sessionId)}/messages`, { type: 'image', meta }).then(
+    (res) => res.message
+  );
+}
+
+function sendFileMessage(sessionId, meta) {
+  return request('POST', `/v1/sessions/${encodeURIComponent(sessionId)}/messages`, { type: 'file', meta }).then(
+    (res) => res.message
+  );
+}
+
 function bindWeChatSession() {
   return new Promise((resolve, reject) => {
     if (typeof wx?.login !== 'function') {
@@ -337,6 +376,9 @@ module.exports = {
   archiveSession,
   listMessages,
   sendTextMessage,
+  uploadFile,
+  sendImageMessage,
+  sendFileMessage,
   bindWeChatSession,
   createCall,
   getCall,
