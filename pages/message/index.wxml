@@ -15,10 +15,12 @@
     title="{{ item.peer.displayName }}"
     description="{{ item.desc }}"
     hover
-    bind:tap="toChat"
+    bind:click="toChat"
     bind:longpress="onLongPressSession"
     data-session="{{ item }}"
   >
     <t-badge wx:if="{{ item.unreadCount > 0 }}" slot="right-icon" count="{{ item.unreadCount }}" class="wrapper" />
   </t-cell>
 </scroll-view>
+
+<scan-fab />

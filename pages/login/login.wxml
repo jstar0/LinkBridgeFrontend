@@ -3,13 +3,13 @@
   <view class="login__title"> 欢迎使用 LinkBridge </view>
   <view class="login__content">
     <view class="login__input">
-      <t-input label="用户名" placeholder="请输入用户名" value="{{username}}" bindchange="onUsernameChange" clearable />
+      <t-input label="用户名" placeholder="请输入用户名" value="{{username}}" bind:change="onUsernameChange" clearable />
       <t-input
         wx:if="{{mode === 'register'}}"
         label="显示名称"
         placeholder="请输入显示名称"
         value="{{displayName}}"
-        bindchange="onDisplayNameChange"
+        bind:change="onDisplayNameChange"
         clearable
       />
       <t-input
@@ -18,7 +18,7 @@
         type="password"
         clearable
         value="{{password}}"
-        bindchange="onPasswordChange"
+        bind:change="onPasswordChange"
       />
     </view>
 
@@ -27,7 +27,7 @@
     <view class="login__error" wx:if="{{errorMessage}}">{{errorMessage}}</view>
 
     <view class="login__button">
-      <t-button theme="primary" size="large" block loading="{{loading}}" disabled="{{!canSubmit}}" bindtap="onSubmit">
+      <t-button theme="primary" size="large" block loading="{{loading}}" disabled="{{!canSubmit}}" bind:tap="onSubmit">
         {{ mode === 'login' ? '登录' : '注册并登录' }}
       </t-button>
     </view>
@@ -35,7 +35,7 @@
     <view class="login__password--forget">
       <text wx:if="{{mode === 'login'}}" bindtap="toggleMode">没有账号？</text>
       <text wx:else bindtap="toggleMode">已有账号？</text>
-      <t-link theme="primary" size="small" bindtap="toggleMode">{{mode === 'login' ? '去注册' : '去登录'}}</t-link>
+      <t-link theme="primary" size="small" bind:tap="toggleMode">{{mode === 'login' ? '去注册' : '去登录'}}</t-link>
     </view>
   </view>
 </view>

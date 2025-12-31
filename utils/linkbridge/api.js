@@ -6,8 +6,9 @@ function getBaseUrl() {
   }
 }
 
-const BASE_URL = getBaseUrl();
-const WS_URL = BASE_URL.replace(/^http/i, 'ws');
+function getWsUrl() {
+  return getBaseUrl().replace(/^http/i, 'ws');
+}
 
 // Align with template naming.
 const TOKEN_KEY = 'access_token';
@@ -72,7 +73,7 @@ function request(method, path, data) {
     }
 
     wx.request({
-      url: `${BASE_URL}${path}`,
+      url: `${getBaseUrl()}${path}`,
       method,
       data,
       header,
@@ -215,7 +216,7 @@ function consumeSessionInvite(code) {
 function getMySessionQrImageUrl(cacheBuster = Date.now()) {
   const token = getToken();
   if (!token) return '';
-  return `${BASE_URL}/v1/wechat/qrcode/session?token=${encodeURIComponent(token)}&t=${encodeURIComponent(
+  return `${getBaseUrl()}/v1/wechat/qrcode/session?token=${encodeURIComponent(token)}&t=${encodeURIComponent(
     cacheBuster
   )}`;
 }
@@ -231,7 +232,7 @@ function connectWebSocket() {
   if (wsConnection) return wsConnection;
 
   wsConnection = wx.connectSocket({
-    url: `${WS_URL}/v1/ws?token=${encodeURIComponent(token)}`,
+    url: `${getWsUrl()}/v1/ws?token=${encodeURIComponent(token)}`,
   });
 
   wx.onSocketMessage((res) => {
@@ -278,8 +279,8 @@ function removeWebSocketHandler(handler) {
 }
 
 module.exports = {
-  BASE_URL,
-  WS_URL,
+  getBaseUrl,
+  getWsUrl,
   getToken,
   setToken,
   getUser,

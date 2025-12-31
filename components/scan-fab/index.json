@@ -1,0 +1,9 @@
+{
+  "component": true,
+  "usingComponents": {
+    "t-fab": "tdesign-miniprogram/fab/fab",
+    "t-popup": "tdesign-miniprogram/popup/popup",
+    "t-button": "tdesign-miniprogram/button/button"
+  }
+}
+

@@ -6,14 +6,9 @@ Component({
     unreadNum: 0, // 未读消息数量
     list: [
       {
-        icon: 'home',
-        value: 'index',
-        label: '首页',
-      },
-      {
         icon: 'chat',
-        value: 'notice',
-        label: '消息',
+        value: 'message',
+        label: '会话',
       },
       {
         icon: 'user',

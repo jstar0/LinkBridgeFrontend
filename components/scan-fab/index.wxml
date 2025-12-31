@@ -1,0 +1,50 @@
+<t-fab
+  icon="scan"
+  style="right: 24rpx; bottom: calc(140rpx + env(safe-area-inset-bottom));"
+  bind:click="onOpen"
+/>
+
+<t-popup visible="{{popupVisible}}" placement="bottom" overlay bind:visible-change="onPopupVisibleChange">
+  <view class="scan-fab">
+    <view class="scan-fab__title">扫码建立会话</view>
+
+    <view wx:if="{{isLoggedIn}}">
+      <view class="scan-fab__box">
+        <image wx:if="{{qrUrl}}" class="scan-fab__img" mode="aspectFit" src="{{qrUrl}}" show-menu-by-longpress />
+      </view>
+      <view class="scan-fab__hint">让对方扫一扫你的码即可建立会话</view>
+
+      <view class="scan-fab__actions">
+        <t-button theme="primary" size="large" block bind:tap="onScan">扫一扫</t-button>
+        <t-button
+          theme="default"
+          variant="outline"
+          size="large"
+          block
+          style="margin-top: 16rpx;"
+          bind:tap="onClose"
+        >
+          关闭
+        </t-button>
+      </view>
+    </view>
+
+    <view wx:else>
+      <view class="scan-fab__hint">请先登录后再扫码建立会话</view>
+      <view class="scan-fab__actions">
+        <t-button theme="primary" size="large" block bind:tap="onGoLogin">去登录</t-button>
+        <t-button
+          theme="default"
+          variant="outline"
+          size="large"
+          block
+          style="margin-top: 16rpx;"
+          bind:tap="onClose"
+        >
+          关闭
+        </t-button>
+      </view>
+    </view>
+  </view>
+</t-popup>
+

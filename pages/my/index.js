@@ -4,14 +4,22 @@ Page({
   data: {
     isLoggedIn: false,
     me: { id: '', username: '', displayName: '' },
-    qrUrl: '',
+    serverUrl: '',
     serverPopupVisible: false,
     serverUrlInput: '',
   },
 
   onShow() {
     const loggedIn = api.isLoggedIn();
-    this.setData({ isLoggedIn: loggedIn, qrUrl: loggedIn ? api.getMySessionQrImageUrl(Date.now()) : '' });
+
+    let currentServer = 'http://localhost:8080';
+    try {
+      currentServer = wx.getStorageSync('lb_base_url') || currentServer;
+    } catch (e) {
+      // ignore
+    }
+
+    this.setData({ isLoggedIn: loggedIn, serverUrl: currentServer });
     if (!loggedIn) return;
 
     api
@@ -90,34 +98,9 @@ Page({
       return;
     }
 
-    // The api module reads BASE_URL at load time, so a relaunch is the simplest way to apply the new value everywhere.
-    wx.showToast({ title: '已保存，将重启应用', icon: 'none' });
-    setTimeout(() => {
-      wx.reLaunch({ url: '/pages/login/login' });
-    }, 400);
-  },
-
-  onTapScan() {
-    if (typeof wx?.scanCode !== 'function') {
-      wx.showToast({ title: '当前环境不支持扫码', icon: 'none' });
-      return;
-    }
-
-    wx.scanCode({
-      onlyFromCamera: true,
-      scanType: ['qrCode'],
-      success: (res) => {
-        const path = res?.path || '';
-        if (path) {
-          const url = path.startsWith('/') ? path : `/${path}`;
-          wx.navigateTo({ url });
-          return;
-        }
-        wx.showToast({ title: '请扫描小程序码', icon: 'none' });
-      },
-      fail: () => {
-        wx.showToast({ title: '已取消', icon: 'none' });
-      },
-    });
+    // Apply immediately for subsequent requests; also close WS so next connect uses the new URL.
+    api.closeWebSocket();
+    this.setData({ serverUrl: next, serverPopupVisible: false });
+    wx.showToast({ title: '已保存', icon: 'none' });
   },
 });

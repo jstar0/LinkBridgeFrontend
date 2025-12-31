@@ -4,7 +4,7 @@
   <image class="nav-bg" src="/static/bg_navbar.png" />
   <nav title-text="我的" />
 
-  <view class="my-card">
+<view class="my-card">
     <t-cell-group>
       <t-cell wx:if="{{isLoggedIn}}" bordered="{{false}}">
         <t-avatar icon="user" slot="left-icon" size="large" />
@@ -20,38 +20,23 @@
         bordered="{{false}}"
         t-class-title="cell-class-title"
         t-class-center="cell-class-center"
-        bindtap="onTapLogin"
+        bind:click="onTapLogin"
       >
         <t-avatar slot="left-icon" icon="user" size="128rpx" />
       </t-cell>
+
+      <t-cell wx:if="{{isLoggedIn}}" title="服务器地址" note="{{serverUrl}}" arrow bind:click="onTapServer">
+        <t-icon slot="left-icon" name="link" />
+      </t-cell>
+
+      <t-cell wx:if="{{isLoggedIn}}" title="退出登录" arrow bind:click="onTapLogout">
+        <t-icon slot="left-icon" name="logout" />
+      </t-cell>
     </t-cell-group>
-
-    <view class="my-qr" wx:if="{{isLoggedIn}}">
-      <view class="my-qr__title">我的会话二维码</view>
-      <view class="my-qr__box">
-        <image wx:if="{{qrUrl}}" class="my-qr__img" mode="aspectFit" src="{{qrUrl}}" show-menu-by-longpress />
-      </view>
-      <view class="my-qr__hint">让对方扫一扫即可建立临时会话</view>
-
-      <view class="my-qr__actions">
-        <t-button theme="primary" size="large" block bindtap="onTapScan">扫一扫开始会话</t-button>
-        <t-button
-          theme="default"
-          variant="outline"
-          size="large"
-          block
-          bindtap="onTapServer"
-          style="margin-top: 16rpx;"
-        >
-          服务器地址
-        </t-button>
-        <t-button theme="default" variant="outline" size="large" block bindtap="onTapLogout" style="margin-top: 16rpx;">
-          退出登录
-        </t-button>
-      </view>
-    </view>
   </view>
 </view>
+
+<scan-fab />
 
 <t-popup visible="{{serverPopupVisible}}" placement="bottom" overlay bind:visible-change="onServerPopupVisibleChange">
   <view class="my-server">
@@ -62,13 +47,13 @@
       label="BASE_URL"
       placeholder="请输入后端地址"
       value="{{serverUrlInput}}"
-      bindchange="onServerUrlChange"
+      bind:change="onServerUrlChange"
       clearable
     />
 
     <view class="my-server__actions">
-      <t-button theme="primary" size="large" block bindtap="onSaveServerUrl">保存</t-button>
-      <t-button theme="default" variant="outline" size="large" block style="margin-top: 16rpx;" bindtap="onCloseServerPopup">
+      <t-button theme="primary" size="large" block bind:tap="onSaveServerUrl">保存</t-button>
+      <t-button theme="default" variant="outline" size="large" block style="margin-top: 16rpx;" bind:tap="onCloseServerPopup">
         取消
       </t-button>
     </view>

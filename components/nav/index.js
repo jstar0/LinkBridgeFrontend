@@ -13,11 +13,6 @@ Component({
     visible: false,
     sidebar: [
       {
-        title: '首页',
-        url: 'pages/home/index',
-        isSidebar: true,
-      },
-      {
         title: '会话',
         url: 'pages/message/index',
         isSidebar: true,
