@@ -2,7 +2,7 @@
 
 <t-navbar class="nav-bar" title="{{ name }}" left-arrow>
   <view slot="right" class="chat-nav__right">
-    <t-icon name="call" size="48rpx" bind:tap="onTapVoiceCall" />
+    <t-icon name="call" size="48rpx" color="#000000e6" bind:tap="onTapVoiceCall" />
   </view>
 </t-navbar>
 
@@ -29,7 +29,7 @@
         </view>
 
         <view wx:else class="message-area">
-          <t-avatar image="{{ avatar }}" size="small" />
+          <t-avatar image="{{ avatar }}" size="small" bind:tap="onTapPeerAvatar" />
           <view class="message other">
           <text space="nbsp">{{ item.content }}</text>
           </view>
@@ -60,3 +60,29 @@
   </view>
   <t-button class="send" theme="primary" shape="round" disabled="{{ !input }}" bind:tap="sendMessage">发送</t-button>
 </view>
+
+<t-popup visible="{{peerProfileVisible}}" placement="bottom" overlay bind:visible-change="onPeerProfileVisibleChange">
+  <view class="peer-profile">
+    <view class="peer-profile__header">
+      <t-avatar image="{{peerProfile.avatarUrl}}" size="large" />
+      <view class="peer-profile__meta">
+        <view class="peer-profile__name">{{peerProfile.displayName}}</view>
+        <view class="peer-profile__sub">{{peerProfile.username}}</view>
+      </view>
+    </view>
+
+    <view class="peer-profile__actions">
+      <t-button theme="primary" size="large" block bind:tap="onTapVoiceCall">语音通话</t-button>
+      <t-button
+        theme="default"
+        variant="outline"
+        size="large"
+        block
+        style="margin-top: 16rpx;"
+        bind:tap="onClosePeerProfile"
+      >
+        关闭
+      </t-button>
+    </view>
+  </view>
+</t-popup>

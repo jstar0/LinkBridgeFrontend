@@ -18,6 +18,8 @@ Page({
     peerUserId: '',
     avatar: '/static/chat/avatar.png',
     name: '会话',
+    peerProfileVisible: false,
+    peerProfile: { id: '', username: '', displayName: '', avatarUrl: '/static/chat/avatar.png' },
     messages: [],
     input: '',
     anchor: '',
@@ -52,6 +54,10 @@ Page({
 
     api.connectWebSocket();
     this.loadMessages();
+
+    if (peerUserId) {
+      this.loadPeerProfile(peerUserId);
+    }
 
     this.wsHandler = (env) => {
       if (env?.type !== 'message.created') return;
@@ -149,6 +155,43 @@ Page({
       `&mediaType=voice` +
       (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '');
     wx.navigateTo({ url });
+  },
+
+  loadPeerProfile(peerUserId) {
+    api
+      .getUserById(peerUserId)
+      .then((u) => {
+        const displayName = u?.displayName || this.data.name || '对方';
+        const username = u?.username ? `@${u.username}` : '';
+        const avatarUrl = u?.avatarUrl || '/static/chat/avatar.png';
+        this.setData({
+          peerProfile: {
+            id: u?.id || peerUserId,
+            username,
+            displayName,
+            avatarUrl,
+          },
+        });
+      })
+      .catch(() => null);
+  },
+
+  onTapPeerAvatar() {
+    const peerUserId = this.data.peerUserId || '';
+    if (!peerUserId) {
+      wx.showToast({ title: '缺少对方信息', icon: 'none' });
+      return;
+    }
+    this.setData({ peerProfileVisible: true });
+    this.loadPeerProfile(peerUserId);
+  },
+
+  onClosePeerProfile() {
+    this.setData({ peerProfileVisible: false });
+  },
+
+  onPeerProfileVisibleChange(e) {
+    this.setData({ peerProfileVisible: !!e?.detail?.visible });
   },
 
   scrollToBottom() {

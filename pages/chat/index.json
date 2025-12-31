@@ -4,7 +4,8 @@
     "t-avatar": "tdesign-miniprogram/avatar/avatar",
     "t-loading": "tdesign-miniprogram/loading/loading",
     "t-button": "tdesign-miniprogram/button/button",
-    "t-icon": "tdesign-miniprogram/icon/icon"
+    "t-icon": "tdesign-miniprogram/icon/icon",
+    "t-popup": "tdesign-miniprogram/popup/popup"
   },
   "navigationStyle": "custom"
 }
