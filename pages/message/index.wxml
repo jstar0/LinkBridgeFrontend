@@ -16,6 +16,7 @@
     description="{{ item.desc }}"
     hover
     bind:tap="toChat"
+    bind:longpress="onLongPressSession"
     data-session="{{ item }}"
   >
     <t-badge wx:if="{{ item.unreadCount > 0 }}" slot="right-icon" count="{{ item.unreadCount }}" class="wrapper" />

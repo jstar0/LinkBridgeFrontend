@@ -38,6 +38,14 @@ Page({
         return;
       }
 
+      if (env?.type === 'session.archived') {
+        const archivedId = env?.payload?.session?.id || env?.payload?.sessionId || '';
+        if (!archivedId) return;
+        const next = this.data.sessions.filter((s) => s.id !== archivedId);
+        if (next.length !== this.data.sessions.length) this.setData({ sessions: next });
+        return;
+      }
+
       if (env?.type === 'message.created') {
         const msg = env?.payload?.message;
         const sid = msg?.sessionId;
@@ -114,5 +122,31 @@ Page({
       (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '') +
       (peerUserId ? `&peerUserId=${encodeURIComponent(peerUserId)}` : '');
     wx.navigateTo({ url });
+  },
+
+  onLongPressSession(event) {
+    const session = event?.currentTarget?.dataset?.session;
+    if (!session?.id) return;
+
+    wx.showActionSheet({
+      itemList: ['结束会话'],
+      success: (res) => {
+        if (res?.tapIndex !== 0) return;
+
+        wx.showLoading({ title: '结束中...' });
+        api
+          .archiveSession(session.id)
+          .then(() => {
+            const next = this.data.sessions.filter((s) => s.id !== session.id);
+            this.setData({ sessions: next });
+            wx.hideLoading();
+            wx.showToast({ title: '已结束', icon: 'none' });
+          })
+          .catch(() => {
+            wx.hideLoading();
+            wx.showToast({ title: '结束失败', icon: 'none' });
+          });
+      },
+    });
   },
 });

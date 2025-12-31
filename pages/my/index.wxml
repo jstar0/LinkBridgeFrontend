@@ -35,6 +35,16 @@
 
       <view class="my-qr__actions">
         <t-button theme="primary" size="large" block bindtap="onTapScan">扫一扫开始会话</t-button>
+        <t-button
+          theme="default"
+          variant="outline"
+          size="large"
+          block
+          bindtap="onTapServer"
+          style="margin-top: 16rpx;"
+        >
+          服务器地址
+        </t-button>
         <t-button theme="default" variant="outline" size="large" block bindtap="onTapLogout" style="margin-top: 16rpx;">
           退出登录
         </t-button>
@@ -42,3 +52,25 @@
     </view>
   </view>
 </view>
+
+<t-popup visible="{{serverPopupVisible}}" placement="bottom" overlay bind:visible-change="onServerPopupVisibleChange">
+  <view class="my-server">
+    <view class="my-server__title">服务器地址</view>
+    <view class="my-server__hint">例如：http://192.168.1.10:8080</view>
+
+    <t-input
+      label="BASE_URL"
+      placeholder="请输入后端地址"
+      value="{{serverUrlInput}}"
+      bindchange="onServerUrlChange"
+      clearable
+    />
+
+    <view class="my-server__actions">
+      <t-button theme="primary" size="large" block bindtap="onSaveServerUrl">保存</t-button>
+      <t-button theme="default" variant="outline" size="large" block style="margin-top: 16rpx;" bindtap="onCloseServerPopup">
+        取消
+      </t-button>
+    </view>
+  </view>
+</t-popup>

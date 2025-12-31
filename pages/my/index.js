@@ -5,6 +5,8 @@ Page({
     isLoggedIn: false,
     me: { id: '', username: '', displayName: '' },
     qrUrl: '',
+    serverPopupVisible: false,
+    serverUrlInput: '',
   },
 
   onShow() {
@@ -45,6 +47,54 @@ Page({
         wx.hideLoading();
         wx.reLaunch({ url: '/pages/login/login' });
       });
+  },
+
+  onTapServer() {
+    let current = 'http://localhost:8080';
+    try {
+      current = wx.getStorageSync('lb_base_url') || current;
+    } catch (e) {
+      // ignore
+    }
+    this.setData({ serverPopupVisible: true, serverUrlInput: current });
+  },
+
+  onCloseServerPopup() {
+    this.setData({ serverPopupVisible: false });
+  },
+
+  onServerPopupVisibleChange(e) {
+    this.setData({ serverPopupVisible: !!e?.detail?.visible });
+  },
+
+  onServerUrlChange(e) {
+    const value = e?.detail?.value || '';
+    this.setData({ serverUrlInput: value });
+  },
+
+  onSaveServerUrl() {
+    const next = (this.data.serverUrlInput || '').trim().replace(/\/+$/, '');
+    if (!next) {
+      wx.showToast({ title: '请输入地址', icon: 'none' });
+      return;
+    }
+    if (!/^https?:\/\//i.test(next)) {
+      wx.showToast({ title: '需以 http(s):// 开头', icon: 'none' });
+      return;
+    }
+
+    try {
+      wx.setStorageSync('lb_base_url', next);
+    } catch (e) {
+      wx.showToast({ title: '保存失败', icon: 'none' });
+      return;
+    }
+
+    // The api module reads BASE_URL at load time, so a relaunch is the simplest way to apply the new value everywhere.
+    wx.showToast({ title: '已保存，将重启应用', icon: 'none' });
+    setTimeout(() => {
+      wx.reLaunch({ url: '/pages/login/login' });
+    }, 400);
   },
 
   onTapScan() {
