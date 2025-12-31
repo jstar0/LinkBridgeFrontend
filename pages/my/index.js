@@ -12,12 +12,7 @@ Page({
   onShow() {
     const loggedIn = api.isLoggedIn();
 
-    let currentServer = 'http://localhost:8080';
-    try {
-      currentServer = wx.getStorageSync('lb_base_url') || currentServer;
-    } catch (e) {
-      // ignore
-    }
+    const currentServer = api.getBaseUrl();
 
     this.setData({ isLoggedIn: loggedIn, serverUrl: currentServer });
     if (!loggedIn) return;
@@ -47,12 +42,7 @@ Page({
   },
 
   onTapServer() {
-    let current = 'http://localhost:8080';
-    try {
-      current = wx.getStorageSync('lb_base_url') || current;
-    } catch (e) {
-      // ignore
-    }
+    const current = api.getBaseUrl();
     this.setData({ serverPopupVisible: true, serverUrlInput: current });
   },
 

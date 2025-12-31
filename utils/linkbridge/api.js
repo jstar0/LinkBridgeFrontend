@@ -1,8 +1,8 @@
 function getBaseUrl() {
   try {
-    return wx.getStorageSync('lb_base_url') || 'http://localhost:8080';
+    return wx.getStorageSync('lb_base_url') || 'http://103.40.13.96:8081';
   } catch (e) {
-    return 'http://localhost:8080';
+    return 'http://103.40.13.96:8081';
   }
 }
 

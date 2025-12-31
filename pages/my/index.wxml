@@ -41,7 +41,7 @@
 <t-popup visible="{{serverPopupVisible}}" placement="bottom" overlay bind:visible-change="onServerPopupVisibleChange">
   <view class="my-server">
     <view class="my-server__title">服务器地址</view>
-    <view class="my-server__hint">例如：http://192.168.1.10:8080</view>
+    <view class="my-server__hint">例如：http://103.40.13.96:8081</view>
 
     <t-input
       label="BASE_URL"
