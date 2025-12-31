@@ -1,5 +1,33 @@
 const api = require('../../utils/linkbridge/api');
 
+function parseQueryString(qs) {
+  const out = {};
+  if (!qs) return out;
+  qs
+    .split('&')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((kv) => {
+      const idx = kv.indexOf('=');
+      if (idx < 0) return;
+      const k = decodeURIComponent(kv.slice(0, idx));
+      const v = decodeURIComponent(kv.slice(idx + 1));
+      out[k] = v;
+    });
+  return out;
+}
+
+function extractInviteCodeFromPath(path) {
+  if (!path) return '';
+  const parts = String(path).split('?');
+  if (parts.length < 2) return '';
+  const query = parseQueryString(parts.slice(1).join('?'));
+  if (query.c) return String(query.c);
+  if (!query.scene) return '';
+  const scene = parseQueryString(String(query.scene));
+  return scene.c ? String(scene.c) : '';
+}
+
 Component({
   data: {
     popupVisible: false,
@@ -51,13 +79,45 @@ Component({
         scanType: ['qrCode'],
         success: (res) => {
           const path = res?.path || '';
-          if (path) {
+          if (!path) {
+            wx.showToast({ title: '请扫描小程序码', icon: 'none' });
+            return;
+          }
+
+          const inviteCode = extractInviteCodeFromPath(path);
+          if (!inviteCode) {
+            // Fallback: navigate to the embedded path (for compatibility).
             this.onClose();
             const url = path.startsWith('/') ? path : `/${path}`;
             wx.navigateTo({ url });
             return;
           }
-          wx.showToast({ title: '请扫描小程序码', icon: 'none' });
+
+          if (!api.isLoggedIn()) {
+            try {
+              wx.setStorageSync('lb_pending_invite_code', inviteCode);
+            } catch (e) {
+              // ignore
+            }
+            this.onClose();
+            wx.navigateTo({ url: '/pages/login/login' });
+            return;
+          }
+
+          wx.showLoading({ title: '处理中...' });
+          api
+            .consumeSessionInvite(inviteCode)
+            .then(() => {
+              wx.hideLoading();
+              this.onClose();
+              wx.showToast({ title: '已发送会话请求', icon: 'none' });
+              wx.switchTab({ url: '/pages/message/index' });
+            })
+            .catch((err) => {
+              wx.hideLoading();
+              const msg = err?.message || '处理失败';
+              wx.showToast({ title: msg, icon: 'none' });
+            });
         },
         fail: () => {
           wx.showToast({ title: '已取消', icon: 'none' });
@@ -66,4 +126,3 @@ Component({
     },
   },
 });
-

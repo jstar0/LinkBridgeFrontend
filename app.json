@@ -23,6 +23,11 @@
       "root": "pages/call",
       "name": "call",
       "pages": ["index"]
+    },
+    {
+      "root": "pages/linkbridge/add-friend",
+      "name": "linkbridge-add-friend",
+      "pages": ["add-friend"]
     }
   ],
   "window": {

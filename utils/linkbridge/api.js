@@ -129,6 +129,10 @@ function getMe() {
   return request('GET', '/v1/auth/me').then((res) => res.user);
 }
 
+function getUserById(userId) {
+  return request('GET', `/v1/users/${encodeURIComponent(userId)}`).then((res) => res.user);
+}
+
 function listSessions(status = 'active') {
   return request('GET', `/v1/sessions?status=${encodeURIComponent(status)}`).then((res) => res.sessions || []);
 }
@@ -210,7 +214,24 @@ function getVoipSign(callId) {
 }
 
 function consumeSessionInvite(code) {
-  return request('POST', '/v1/sessions/invites/consume', { code }).then((res) => res);
+  return request('POST', '/v1/session-requests/invites/consume', { code }).then((res) => res);
+}
+
+function listSessionRequests(box = 'in', status = 'pending') {
+  const qs = `box=${encodeURIComponent(box)}&status=${encodeURIComponent(status)}`;
+  return request('GET', `/v1/session-requests?${qs}`).then((res) => res.requests || []);
+}
+
+function acceptSessionRequest(requestId) {
+  return request('POST', `/v1/session-requests/${encodeURIComponent(requestId)}/accept`).then((res) => res);
+}
+
+function rejectSessionRequest(requestId) {
+  return request('POST', `/v1/session-requests/${encodeURIComponent(requestId)}/reject`).then((res) => res);
+}
+
+function cancelSessionRequest(requestId) {
+  return request('POST', `/v1/session-requests/${encodeURIComponent(requestId)}/cancel`).then((res) => res);
 }
 
 function getMySessionQrImageUrl(cacheBuster = Date.now()) {
@@ -292,6 +313,7 @@ module.exports = {
   login,
   logout,
   getMe,
+  getUserById,
   listSessions,
   createSession,
   archiveSession,
@@ -306,6 +328,10 @@ module.exports = {
   endCall,
   getVoipSign,
   consumeSessionInvite,
+  listSessionRequests,
+  acceptSessionRequest,
+  rejectSessionRequest,
+  cancelSessionRequest,
   getMySessionQrImageUrl,
   connectWebSocket,
   closeWebSocket,

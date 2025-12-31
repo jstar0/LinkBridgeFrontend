@@ -5,6 +5,7 @@ Page({
   data: {
     sessions: [],
     loading: true, // 是否正在加载（用于下拉刷新）
+    incomingRequests: [],
   },
 
   /** 生命周期函数--监听页面加载 */
@@ -22,6 +23,7 @@ Page({
 
     api.connectWebSocket();
     this.getMessageList();
+    this.getIncomingRequests();
 
     this.wsHandler = (env) => {
       if (env?.type === 'session.created') {
@@ -43,6 +45,18 @@ Page({
         if (!archivedId) return;
         const next = this.data.sessions.filter((s) => s.id !== archivedId);
         if (next.length !== this.data.sessions.length) this.setData({ sessions: next });
+        return;
+      }
+
+      if (env?.type === 'session.requested') {
+        // New incoming request; refresh list.
+        this.getIncomingRequests();
+        return;
+      }
+
+      if (env?.type === 'session.request.accepted' || env?.type === 'session.request.rejected') {
+        // Either accepted/rejected by the other side; refresh view.
+        this.getIncomingRequests();
         return;
       }
 
@@ -107,6 +121,24 @@ Page({
       });
   },
 
+  getIncomingRequests() {
+    api
+      .listSessionRequests('in', 'pending')
+      .then((requests) => {
+        const items = (requests || []).slice(0, 10);
+        return Promise.all(
+          items.map((r) =>
+            api
+              .getUserById(r.requesterId)
+              .then((u) => ({ id: r.id, requesterId: r.requesterId, user: u || { id: r.requesterId, displayName: '对方' } }))
+              .catch(() => ({ id: r.id, requesterId: r.requesterId, user: { id: r.requesterId, displayName: '对方' } }))
+          )
+        );
+      })
+      .then((incomingRequests) => this.setData({ incomingRequests: incomingRequests || [] }))
+      .catch(() => this.setData({ incomingRequests: [] }));
+  },
+
   toChat(event) {
     const session = event?.currentTarget?.dataset?.session;
     if (!session?.id) return;
@@ -148,5 +180,42 @@ Page({
           });
       },
     });
+  },
+
+  onAcceptRequest(event) {
+    const requestId = event?.currentTarget?.dataset?.id || '';
+    if (!requestId) return;
+
+    wx.showLoading({ title: '处理中...' });
+    api
+      .acceptSessionRequest(requestId)
+      .then(() => {
+        wx.hideLoading();
+        wx.showToast({ title: '已接受', icon: 'none' });
+        this.getIncomingRequests();
+        this.getMessageList();
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        wx.showToast({ title: err?.message || '失败', icon: 'none' });
+      });
+  },
+
+  onRejectRequest(event) {
+    const requestId = event?.currentTarget?.dataset?.id || '';
+    if (!requestId) return;
+
+    wx.showLoading({ title: '处理中...' });
+    api
+      .rejectSessionRequest(requestId)
+      .then(() => {
+        wx.hideLoading();
+        wx.showToast({ title: '已拒绝', icon: 'none' });
+        this.getIncomingRequests();
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        wx.showToast({ title: err?.message || '失败', icon: 'none' });
+      });
   },
 });

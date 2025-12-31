@@ -29,17 +29,6 @@ Page({
         this.setData({ me: me || { id: '', username: '', displayName: '' } });
       })
       .catch(() => null);
-
-    // If user scanned someone else's code while not logged in, consume it after login.
-    try {
-      const pending = wx.getStorageSync('lb_pending_invite_code') || '';
-      if (pending) {
-        wx.removeStorageSync('lb_pending_invite_code');
-        wx.navigateTo({ url: `/pages/invite/index?c=${encodeURIComponent(pending)}` });
-      }
-    } catch (e) {
-      // ignore
-    }
   },
 
   onTapLogin() {

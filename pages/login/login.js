@@ -90,7 +90,20 @@ Page({
           const pending = wx.getStorageSync('lb_pending_invite_code') || '';
           if (pending) {
             wx.removeStorageSync('lb_pending_invite_code');
-            wx.reLaunch({ url: `/pages/invite/index?c=${encodeURIComponent(pending)}` });
+            wx.showLoading({ title: '处理中...' });
+            api
+              .consumeSessionInvite(pending)
+              .then(() => {
+                wx.hideLoading();
+                wx.showToast({ title: '已发送会话请求', icon: 'none' });
+                wx.switchTab({ url: '/pages/message/index' });
+              })
+              .catch((err) => {
+                wx.hideLoading();
+                const msg = err?.message || '处理失败';
+                wx.showToast({ title: msg, icon: 'none' });
+                wx.switchTab({ url: '/pages/my/index' });
+              });
             return;
           }
         } catch (e) {

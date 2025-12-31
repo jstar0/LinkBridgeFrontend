@@ -1,0 +1,18 @@
+<t-navbar title="会话邀请" left-arrow="{{false}}" />
+
+<view class="page">
+  <view class="box">
+    <t-loading wx:if="{{loading}}" text="处理中..." />
+
+    <view wx:else>
+      <view class="title">{{title}}</view>
+      <view class="desc">{{desc}}</view>
+
+      <view class="actions">
+        <t-button wx:if="{{showLogin}}" theme="primary" block bind:tap="onGoLogin">去登录</t-button>
+        <t-button wx:else theme="primary" block bind:tap="onGoMessage">去会话列表</t-button>
+      </view>
+    </view>
+  </view>
+</view>
+
