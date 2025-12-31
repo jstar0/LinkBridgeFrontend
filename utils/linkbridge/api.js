@@ -299,6 +299,23 @@ function removeWebSocketHandler(handler) {
   if (idx >= 0) wsMessageHandlers.splice(idx, 1);
 }
 
+function sendWebSocketJson(obj) {
+  if (!obj) return;
+  const payload = JSON.stringify(obj);
+  try {
+    wx.sendSocketMessage({ data: payload });
+  } catch (e) {
+    // ignore
+  }
+}
+
+function sendAudioFrame(callId, base64Data) {
+  const cid = String(callId || '').trim();
+  const data = String(base64Data || '').trim();
+  if (!cid || !data) return;
+  sendWebSocketJson({ type: 'audio.frame', callId: cid, data });
+}
+
 module.exports = {
   getBaseUrl,
   getWsUrl,
@@ -338,4 +355,6 @@ module.exports = {
   closeWebSocket,
   addWebSocketHandler,
   removeWebSocketHandler,
+  sendWebSocketJson,
+  sendAudioFrame,
 };

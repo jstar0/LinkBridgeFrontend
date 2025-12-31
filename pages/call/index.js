@@ -51,57 +51,30 @@ function showModal(options) {
   });
 }
 
-function joinVoip(params) {
-  return new Promise((resolve, reject) => {
-    if (typeof wx?.joinVoIPChat !== 'function') {
-      reject({ code: 'unsupported', message: 'wx.joinVoIPChat not available' });
-      return;
-    }
+function makeWavHeader({ numChannels, sampleRate, bitsPerSample, dataSize }) {
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const byteRate = sampleRate * blockAlign;
+  const buffer = new ArrayBuffer(44);
+  const view = new DataView(buffer);
 
-    wx.joinVoIPChat({
-      roomType: params.roomType || 'voice',
-      signature: params.signature,
-      nonceStr: params.nonceStr,
-      timeStamp: params.timeStamp,
-      groupId: params.groupId,
-      success(res) {
-        resolve(res);
-      },
-      fail(err) {
-        reject({ code: 'join_failed', message: err?.errMsg || 'join failed', detail: err });
-      },
-    });
-  });
-}
+  function writeString(offset, str) {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  }
 
-function isNoVoipPermissionError(err) {
-  const msg = String(err?.detail?.errMsg || err?.message || '').toLowerCase();
-  return msg.includes('joinvoipchat:fail no permission') || msg.includes('fail no permission');
-}
-
-function isVoipNotSupportedError(err) {
-  const msg = String(err?.detail?.errMsg || err?.message || '').toLowerCase();
-  return msg.includes('not support') || msg.includes('not available') || msg.includes('unsupported');
-}
-
-function extractAppIdFromErr(err) {
-  const msg = String(err?.detail?.errMsg || err?.message || '');
-  const m = /appid=([a-z0-9_]+)/i.exec(msg);
-  return m?.[1] || '';
-}
-
-function exitVoip() {
-  return new Promise((resolve) => {
-    if (typeof wx?.exitVoIPChat !== 'function') {
-      resolve({ skipped: true });
-      return;
-    }
-    wx.exitVoIPChat({
-      complete() {
-        resolve({ exited: true });
-      },
-    });
-  });
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true); // PCM fmt chunk size
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+  return buffer;
 }
 
 function buildViewState({ status, incoming }) {
@@ -132,6 +105,12 @@ Page({
   },
 
   wsHandler: null,
+  recorder: null,
+  playingAudio: null,
+  playQueue: [],
+  playIndex: 0,
+  currentPlayPath: '',
+  startedAudio: false,
 
   onLoad(query) {
     if (!api.isLoggedIn()) {
@@ -183,6 +162,8 @@ Page({
       api.removeWebSocketHandler(this.wsHandler);
       this.wsHandler = null;
     }
+
+    this.stopRealtimeAudio().catch(() => null);
   },
 
   onTapBack() {
@@ -193,13 +174,21 @@ Page({
     if (!callId) return;
 
     this.wsHandler = (data) => {
+      if (data?.type === 'audio.frame') {
+        const payload = data?.payload || {};
+        if (payload?.callId !== callId) return;
+        const b64 = payload?.data || '';
+        if (b64) this.enqueueIncomingAudioFrame(b64);
+        return;
+      }
+
       const envCall = data?.payload?.call;
       if (!envCall || envCall.id !== callId) return;
 
       if (data.type === 'call.accepted') {
         if (!this.data.incoming) {
           this.setStatus('accepted', '对方已接听，正在接入…');
-          this.joinAfterAccepted();
+          this.startRealtimeAudio();
         }
       }
       if (data.type === 'call.rejected') {
@@ -268,8 +257,19 @@ Page({
   },
 
   joinAfterAccepted() {
+    // Backward-compat shim: keep old method name used in a few places.
+    this.startRealtimeAudio();
+  },
+
+  startRealtimeAudio() {
     const callId = this.data.callId;
     if (!callId) return;
+    if (this.startedAudio) {
+      this.setStatus('in_call', '通话中');
+      return;
+    }
+
+    this.startedAudio = true;
 
     Promise.resolve()
       .then(() =>
@@ -282,71 +282,148 @@ Page({
           }).then((res) => (res.confirm ? openSettings() : Promise.reject(new Error('permission denied'))))
         )
       )
-      .then(() =>
-        api.getVoipSign(callId).catch((err) => {
-          if (err?.code === 'WECHAT_NOT_BOUND') {
-            return api.bindWeChatSession().then(() => api.getVoipSign(callId));
-          }
-          throw err;
-        })
-      )
-      .then((res) => {
-        const attemptJoin = (payload, retried) =>
-          joinVoip({
-            roomType: payload.roomType,
-            groupId: payload.groupId,
-            nonceStr: payload.nonceStr,
-            timeStamp: payload.timeStamp,
-            signature: payload.signature,
-          }).catch((err) => {
-            if (retried) throw err;
-            return api
-              .bindWeChatSession()
-              .then(() => api.getVoipSign(callId))
-              .then((next) => attemptJoin(next, true));
-          });
-
-        return attemptJoin(res, false);
-      })
       .then(() => {
+        if (typeof wx?.getRecorderManager !== 'function') {
+          throw new Error('recorder not supported');
+        }
+
+        const recorder = wx.getRecorderManager();
+        this.recorder = recorder;
+
+        recorder.onFrameRecorded((e) => {
+          const buf = e?.frameBuffer;
+          if (!buf) return;
+          const b64 = wx.arrayBufferToBase64(buf);
+          api.sendAudioFrame(callId, b64);
+        });
+
+        recorder.onError((e) => {
+          console.error('recorder error', e);
+        });
+
+        // Real-time PCM frames (16kHz mono) for low-cost relay via backend WS.
+        recorder.start({
+          duration: 10 * 60 * 1000,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          format: 'PCM',
+          frameSize: 5,
+        });
+
         this.setStatus('in_call', '通话中');
       })
       .catch((err) => {
-        console.error('Failed to join VoIP:', err);
-
-        if (isNoVoipPermissionError(err)) {
-          const appId = extractAppIdFromErr(err);
-          const detail = err?.detail?.errMsg ? `\n\n错误：${err.detail.errMsg}` : '';
-          showModal({
-            title: '通话权限未开通',
-            content:
-              '当前小程序 AppID 未开通“音视频通话(VoIP)”能力，因此会返回 joinVoIPChat:fail no permission。\n\n' +
-              '处理方式：\n' +
-              '1) 登录微信公众平台 → 小程序 → 功能/能力 → 申请开通“实时音视频/音视频通话(VoIP)”\n' +
-              '2) 确认开发者工具/真机调试使用的是同一个 AppID' +
-              (appId ? `（当前：${appId}）` : '') +
-              detail,
-            showCancel: false,
-            confirmText: '我知道了',
-          }).then(() => null);
-          this.setStatus('failed', '通话权限未开通');
-          return;
-        }
-
-        if (isVoipNotSupportedError(err)) {
-          showModal({
-            title: '当前环境不支持通话',
-            content: '当前微信版本/基础库/调试环境不支持 joinVoIPChat，请在真机上使用较新的微信版本重试。',
-            showCancel: false,
-            confirmText: '我知道了',
-          }).then(() => null);
-          this.setStatus('failed', '当前环境不支持通话');
-          return;
-        }
-
+        console.error('Failed to start realtime audio:', err);
+        this.startedAudio = false;
         wx.showToast({ title: '进入通话失败', icon: 'none' });
         this.setStatus('failed', '进入通话失败');
       });
+  },
+
+  stopRealtimeAudio() {
+    this.startedAudio = false;
+
+    if (this.recorder) {
+      try {
+        this.recorder.stop();
+      } catch (e) {
+        // ignore
+      }
+      this.recorder = null;
+    }
+
+    if (this.playingAudio) {
+      try {
+        this.playingAudio.stop();
+        this.playingAudio.destroy();
+      } catch (e) {
+        // ignore
+      }
+      this.playingAudio = null;
+    }
+
+    // best-effort cleanup current file
+    const cur = this.currentPlayPath;
+    this.currentPlayPath = '';
+    if (cur) {
+      try {
+        wx.getFileSystemManager().unlink({ filePath: cur });
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    this.playQueue = [];
+    return Promise.resolve();
+  },
+
+  enqueueIncomingAudioFrame(base64Data) {
+    // Wrap a single PCM frame into a WAV file and play sequentially.
+    const pcm = wx.base64ToArrayBuffer(base64Data);
+    const header = makeWavHeader({
+      numChannels: 1,
+      sampleRate: 16000,
+      bitsPerSample: 16,
+      dataSize: pcm.byteLength,
+    });
+
+    const wav = new Uint8Array(header.byteLength + pcm.byteLength);
+    wav.set(new Uint8Array(header), 0);
+    wav.set(new Uint8Array(pcm), header.byteLength);
+
+    const filePath = `${wx.env.USER_DATA_PATH}/lb_call_${Date.now()}_${this.playIndex++}.wav`;
+    try {
+      const fs = wx.getFileSystemManager();
+      fs.writeFile({
+        filePath,
+        data: wav.buffer,
+        encoding: 'binary',
+        success: () => {
+          this.playQueue.push(filePath);
+          this.kickPlayQueue();
+        },
+        fail: () => null,
+      });
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  kickPlayQueue() {
+    if (!this.startedAudio) return;
+
+    if (!this.playingAudio) {
+      this.playingAudio = wx.createInnerAudioContext();
+      this.playingAudio.autoplay = false;
+      this.playingAudio.onEnded(() => {
+        const done = this.currentPlayPath;
+        this.currentPlayPath = '';
+        if (done) {
+          try {
+            wx.getFileSystemManager().unlink({ filePath: done });
+          } catch (e) {
+            // ignore
+          }
+        }
+        this.kickPlayQueue();
+      });
+      this.playingAudio.onError(() => {
+        // drop current and continue
+        this.kickPlayQueue();
+      });
+    }
+
+    if (this.currentPlayPath) return;
+    const next = this.playQueue.shift();
+    if (!next) return;
+
+    this.currentPlayPath = next;
+    try {
+      this.playingAudio.src = next;
+      this.playingAudio.play();
+    } catch (e) {
+      this.currentPlayPath = '';
+    }
   },
 
   onTapAccept() {
@@ -356,7 +433,7 @@ Page({
     this.setStatus('accepted', '接听中…');
     api
       .acceptCall(callId)
-      .then(() => this.joinAfterAccepted())
+      .then(() => this.startRealtimeAudio())
       .catch((err) => {
         console.error('Accept call failed:', err);
         wx.showToast({ title: '接听失败', icon: 'none' });
@@ -393,7 +470,7 @@ Page({
     this.setStatus('ended', '挂断中…');
 
     Promise.resolve()
-      .then(() => exitVoip())
+      .then(() => this.stopRealtimeAudio())
       .then(() => api.endCall(callId))
       .catch(() => null)
       .then(() => wx.navigateBack());
