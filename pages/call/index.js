@@ -74,6 +74,22 @@ function joinVoip(params) {
   });
 }
 
+function isNoVoipPermissionError(err) {
+  const msg = String(err?.detail?.errMsg || err?.message || '').toLowerCase();
+  return msg.includes('joinvoipchat:fail no permission') || msg.includes('fail no permission');
+}
+
+function isVoipNotSupportedError(err) {
+  const msg = String(err?.detail?.errMsg || err?.message || '').toLowerCase();
+  return msg.includes('not support') || msg.includes('not available') || msg.includes('unsupported');
+}
+
+function extractAppIdFromErr(err) {
+  const msg = String(err?.detail?.errMsg || err?.message || '');
+  const m = /appid=([a-z0-9_]+)/i.exec(msg);
+  return m?.[1] || '';
+}
+
 function exitVoip() {
   return new Promise((resolve) => {
     if (typeof wx?.exitVoIPChat !== 'function') {
@@ -297,6 +313,37 @@ Page({
       })
       .catch((err) => {
         console.error('Failed to join VoIP:', err);
+
+        if (isNoVoipPermissionError(err)) {
+          const appId = extractAppIdFromErr(err);
+          const detail = err?.detail?.errMsg ? `\n\n错误：${err.detail.errMsg}` : '';
+          showModal({
+            title: '通话权限未开通',
+            content:
+              '当前小程序 AppID 未开通“音视频通话(VoIP)”能力，因此会返回 joinVoIPChat:fail no permission。\n\n' +
+              '处理方式：\n' +
+              '1) 登录微信公众平台 → 小程序 → 功能/能力 → 申请开通“实时音视频/音视频通话(VoIP)”\n' +
+              '2) 确认开发者工具/真机调试使用的是同一个 AppID' +
+              (appId ? `（当前：${appId}）` : '') +
+              detail,
+            showCancel: false,
+            confirmText: '我知道了',
+          }).then(() => null);
+          this.setStatus('failed', '通话权限未开通');
+          return;
+        }
+
+        if (isVoipNotSupportedError(err)) {
+          showModal({
+            title: '当前环境不支持通话',
+            content: '当前微信版本/基础库/调试环境不支持 joinVoIPChat，请在真机上使用较新的微信版本重试。',
+            showCancel: false,
+            confirmText: '我知道了',
+          }).then(() => null);
+          this.setStatus('failed', '当前环境不支持通话');
+          return;
+        }
+
         wx.showToast({ title: '进入通话失败', icon: 'none' });
         this.setStatus('failed', '进入通话失败');
       });
