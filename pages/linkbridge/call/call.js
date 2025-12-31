@@ -51,43 +51,6 @@ function showModal(options) {
   });
 }
 
-function joinVoip(params) {
-  return new Promise((resolve, reject) => {
-    if (typeof wx?.joinVoIPChat !== 'function') {
-      reject({ code: 'unsupported', message: 'wx.joinVoIPChat not available' });
-      return;
-    }
-
-    wx.joinVoIPChat({
-      roomType: params.roomType || 'voice',
-      signature: params.signature,
-      nonceStr: params.nonceStr,
-      timeStamp: params.timeStamp,
-      groupId: params.groupId,
-      success(res) {
-        resolve(res);
-      },
-      fail(err) {
-        reject({ code: 'join_failed', message: err?.errMsg || 'join failed', detail: err });
-      },
-    });
-  });
-}
-
-function exitVoip() {
-  return new Promise((resolve) => {
-    if (typeof wx?.exitVoIPChat !== 'function') {
-      resolve({ skipped: true });
-      return;
-    }
-    wx.exitVoIPChat({
-      complete() {
-        resolve({ exited: true });
-      },
-    });
-  });
-}
-
 function buildViewState({ status, incoming }) {
   const showAccept = incoming && status === 'incoming';
   const showReject = incoming && status === 'incoming';
@@ -95,6 +58,12 @@ function buildViewState({ status, incoming }) {
   const showHangup = status === 'in_call';
 
   return { showAccept, showReject, showCancel, showHangup };
+}
+
+function formatDuration(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
 Page({
@@ -113,9 +82,16 @@ Page({
     showReject: false,
     showCancel: false,
     showHangup: false,
+    callDuration: '00:00',
   },
 
   wsHandler: null,
+  recorder: null,
+  audioQueue: [],
+  currentAudio: null,
+  isPlaying: false,
+  durationTimer: null,
+  durationSeconds: 0,
 
   onLoad(query) {
     if (!api.isLoggedIn()) {
@@ -163,6 +139,9 @@ Page({
   },
 
   onUnload() {
+    this.stopRecording();
+    this.stopPlayback();
+    this.stopDurationTimer();
     if (this.wsHandler) {
       api.removeWebSocketHandler(this.wsHandler);
       this.wsHandler = null;
@@ -177,13 +156,21 @@ Page({
     if (!callId) return;
 
     this.wsHandler = (data) => {
+      if (data.type === 'audio.frame') {
+        const payload = data?.payload;
+        if (payload?.callId === callId && payload?.data) {
+          this.handleAudioFrame(payload.data);
+        }
+        return;
+      }
+
       const envCall = data?.payload?.call;
       if (!envCall || envCall.id !== callId) return;
 
       if (data.type === 'call.accepted') {
         if (!this.data.incoming) {
           this.setStatus('accepted', '对方已接听，正在接入…');
-          this.joinAfterAccepted();
+          this.startCall();
         }
       }
       if (data.type === 'call.rejected') {
@@ -225,6 +212,18 @@ Page({
           incoming && caller?.displayName ? caller.displayName : this.data.peerDisplayName;
         this.setData({ peerDisplayName });
 
+        if (call?.status === 'accepted') {
+          this.setStatus('accepted', '正在接入…');
+          this.startCall();
+          return;
+        }
+
+        if (['ended', 'canceled', 'rejected'].includes(call?.status)) {
+          wx.showToast({ title: '通话已结束', icon: 'none' });
+          wx.navigateBack();
+          return;
+        }
+
         if (incoming && autoAccept && call?.status === 'inviting') {
           this.onTapAccept();
         }
@@ -251,55 +250,144 @@ Page({
       });
   },
 
-  joinAfterAccepted() {
+  startCall() {
     const callId = this.data.callId;
     if (!callId) return;
 
-    Promise.resolve()
-      .then(() =>
-        ensurePermission('scope.record').catch(() =>
-          showModal({
-            title: '需要麦克风权限',
-            content: '请在设置中允许使用麦克风后重试',
-            confirmText: '去设置',
-            cancelText: '取消',
-          }).then((res) => (res.confirm ? openSettings() : Promise.reject(new Error('permission denied'))))
-        )
+    ensurePermission('scope.record')
+      .catch(() =>
+        showModal({
+          title: '需要麦克风权限',
+          content: '请在设置中允许使用麦克风后重试',
+          confirmText: '去设置',
+          cancelText: '取消',
+        }).then((res) => (res.confirm ? openSettings() : Promise.reject(new Error('permission denied'))))
       )
-      .then(() =>
-        api.getVoipSign(callId).catch((err) => {
-          if (err?.code === 'WECHAT_NOT_BOUND') {
-            return api.bindWeChatSession().then(() => api.getVoipSign(callId));
-          }
-          throw err;
-        })
-      )
-      .then((res) => {
-        const attemptJoin = (payload, retried) =>
-          joinVoip({
-            roomType: payload.roomType,
-            groupId: payload.groupId,
-            nonceStr: payload.nonceStr,
-            timeStamp: payload.timeStamp,
-            signature: payload.signature,
-          }).catch((err) => {
-            if (retried) throw err;
-            return api
-              .bindWeChatSession()
-              .then(() => api.getVoipSign(callId))
-              .then((next) => attemptJoin(next, true));
-          });
-
-        return attemptJoin(res, false);
-      })
       .then(() => {
         this.setStatus('in_call', '通话中');
+        this.startDurationTimer();
+        this.startRecording();
       })
       .catch((err) => {
-        console.error('Failed to join VoIP:', err);
-        wx.showToast({ title: '进入通话失败', icon: 'none' });
-        this.setStatus('failed', '进入通话失败');
+        console.error('Failed to start call:', err);
+        wx.showToast({ title: '启动通话失败', icon: 'none' });
+        this.setStatus('failed', '启动失败');
       });
+  },
+
+  startRecording() {
+    if (typeof wx?.getRecorderManager !== 'function') {
+      console.error('RecorderManager not available');
+      return;
+    }
+
+    this.recorder = wx.getRecorderManager();
+    const callId = this.data.callId;
+
+    this.recorder.onFrameRecorded((res) => {
+      if (!res?.frameBuffer || this.data.status !== 'in_call') return;
+      const base64 = wx.arrayBufferToBase64(res.frameBuffer);
+      api.sendWebSocketMessage({
+        type: 'audio.frame',
+        callId: callId,
+        data: base64,
+      });
+    });
+
+    this.recorder.onError((err) => {
+      console.error('Recorder error:', err);
+    });
+
+    this.recorder.start({
+      format: 'mp3',
+      sampleRate: 16000,
+      encodeBitRate: 48000,
+      frameSize: 1,
+    });
+  },
+
+  stopRecording() {
+    if (this.recorder) {
+      this.recorder.stop();
+      this.recorder = null;
+    }
+  },
+
+  handleAudioFrame(base64Data) {
+    this.audioQueue.push(base64Data);
+    if (this.audioQueue.length >= 3 && !this.isPlaying) {
+      this.playNextAudio();
+    }
+  },
+
+  playNextAudio() {
+    if (this.audioQueue.length === 0) {
+      this.isPlaying = false;
+      return;
+    }
+
+    this.isPlaying = true;
+    const base64Data = this.audioQueue.shift();
+
+    const fs = wx.getFileSystemManager();
+    const tempPath = `${wx.env.USER_DATA_PATH}/audio_${Date.now()}.mp3`;
+
+    try {
+      fs.writeFileSync(tempPath, base64Data, 'base64');
+    } catch (e) {
+      console.error('Write audio file failed:', e);
+      this.playNextAudio();
+      return;
+    }
+
+    if (this.currentAudio) {
+      this.currentAudio.destroy();
+    }
+
+    this.currentAudio = wx.createInnerAudioContext();
+    this.currentAudio.src = tempPath;
+
+    this.currentAudio.onEnded(() => {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch (e) {}
+      this.playNextAudio();
+    });
+
+    this.currentAudio.onError((err) => {
+      console.error('Audio play error:', err);
+      try {
+        fs.unlinkSync(tempPath);
+      } catch (e) {}
+      this.playNextAudio();
+    });
+
+    this.currentAudio.play();
+  },
+
+  stopPlayback() {
+    this.audioQueue = [];
+    this.isPlaying = false;
+    if (this.currentAudio) {
+      this.currentAudio.stop();
+      this.currentAudio.destroy();
+      this.currentAudio = null;
+    }
+  },
+
+  startDurationTimer() {
+    this.durationSeconds = 0;
+    this.durationTimer = setInterval(() => {
+      this.durationSeconds++;
+      this.setData({ callDuration: formatDuration(this.durationSeconds) });
+    }, 1000);
+  },
+
+  stopDurationTimer() {
+    if (this.durationTimer) {
+      clearInterval(this.durationTimer);
+      this.durationTimer = null;
+    }
   },
 
   onTapAccept() {
@@ -309,7 +397,7 @@ Page({
     this.setStatus('accepted', '接听中…');
     api
       .acceptCall(callId)
-      .then(() => this.joinAfterAccepted())
+      .then(() => this.startCall())
       .catch((err) => {
         console.error('Accept call failed:', err);
         wx.showToast({ title: '接听失败', icon: 'none' });
@@ -344,10 +432,12 @@ Page({
     if (!callId) return;
 
     this.setStatus('ended', '挂断中…');
+    this.stopRecording();
+    this.stopPlayback();
+    this.stopDurationTimer();
 
-    Promise.resolve()
-      .then(() => exitVoip())
-      .then(() => api.endCall(callId))
+    api
+      .endCall(callId)
       .catch(() => null)
       .then(() => wx.navigateBack());
   },

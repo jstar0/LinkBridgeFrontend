@@ -1,6 +1,5 @@
 const TAB_VALUE_TO_URL = {
   dashboard: '/pages/linkbridge/dashboard/dashboard',
-  search: '/pages/linkbridge/search/search',
   settings: '/pages/linkbridge/settings/settings',
 };
 

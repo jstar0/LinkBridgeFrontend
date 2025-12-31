@@ -88,7 +88,9 @@ Page({
         if (code === 'FRIEND_INVITE_INVALID') message = '二维码无效或已过期，请让对方重新生成二维码';
         if (code === 'ALREADY_FRIENDS') message = '你们已经是好友了';
         if (code === 'FRIEND_REQUEST_EXISTS') message = '已发送过好友申请，请等待对方处理';
-        if (code === 'VALIDATION_ERROR') message = '参数错误';
+        if (code === 'VALIDATION_ERROR') {
+          message = err?.message === 'cannot add self' ? '不能添加自己为好友' : '参数错误';
+        }
         this.setData({ loading: false, success: false, errorMessage: message });
       });
   },

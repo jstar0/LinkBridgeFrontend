@@ -13,10 +13,6 @@
   </t-navbar>
 
   <view class="lb-page__content">
-    <view class="lb-dashboard__search">
-      <t-search placeholder="搜索用户" value="{{searchValue}}" bind:change="onSearchChange" bind:submit="onSearchSubmit" />
-    </view>
-
     <view wx:if="{{activeSessions.length > 0}}" class="lb-dashboard__sessions">
       <t-cell-group bordered="{{false}}">
         <t-cell
@@ -44,19 +40,10 @@
 
   <t-fab
     icon="qrcode"
-    aria-label="我的信息"
+    aria-label="建立会话"
     usingCustomNavbar
-    customStyle="bottom: 220px;"
     button-props="{{myQrFabButtonProps}}"
     bind:click="onTapMyQr"
-  />
-
-  <t-fab
-    icon="search"
-    aria-label="搜索用户"
-    usingCustomNavbar
-    customStyle="bottom: 140px;"
-    bind:click="onTapSearch"
   />
 
   <t-popup
@@ -68,7 +55,7 @@
   >
     <view class="lb-connection-modal">
       <view class="lb-connection-modal__header">
-        <text class="lb-connection-modal__title">我的信息</text>
+        <text class="lb-connection-modal__title">建立会话</text>
         <t-icon
           class="lb-connection-modal__close"
           name="close"
@@ -81,10 +68,10 @@
 
       <view class="lb-connection-modal__qr">
         <image
-          wx:if="{{myFriendQrUrl}}"
+          wx:if="{{mySessionQrUrl}}"
           class="lb-connection-modal__qr-image"
           mode="aspectFit"
-          src="{{myFriendQrUrl}}"
+          src="{{mySessionQrUrl}}"
           show-menu-by-longpress
         />
         <view wx:else class="lb-connection-modal__qr-placeholder">
@@ -92,11 +79,11 @@
         </view>
       </view>
 
-      <t-button theme="primary" variant="outline" bind:tap="onTapScanFriend" style="margin-top: 24rpx; width: 100%;">
-        扫一扫加好友
+      <t-button theme="primary" variant="outline" bind:tap="onTapScanSession" style="margin-top: 24rpx; width: 100%;">
+        扫一扫建立会话
       </t-button>
 
-      <view class="lb-connection-modal__hint">让好友扫描此二维码添加你</view>
+      <view class="lb-connection-modal__hint">让对方扫描此二维码与你建立会话</view>
     </view>
   </t-popup>
 

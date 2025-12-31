@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:8080';
-const WS_URL = 'ws://localhost:8080';
+const BASE_URL = 'http://103.40.13.96:8081';
+const WS_URL = 'ws://103.40.13.96:8081';
 
 const TOKEN_KEY = 'linkbridge_token';
 const USER_KEY = 'linkbridge_user';
@@ -276,6 +276,25 @@ function removeWebSocketHandler(handler) {
   }
 }
 
+function sendWebSocketMessage(data) {
+  if (!wsConnection) {
+    console.error('WebSocket not connected');
+    return false;
+  }
+  try {
+    wx.sendSocketMessage({
+      data: JSON.stringify(data),
+      fail(err) {
+        console.error('WebSocket send failed:', err);
+      },
+    });
+    return true;
+  } catch (e) {
+    console.error('WebSocket send error:', e);
+    return false;
+  }
+}
+
 function bindWeChatSession() {
   return new Promise((resolve, reject) => {
     if (typeof wx?.login !== 'function') {
@@ -421,6 +440,7 @@ module.exports = {
   closeWebSocket,
   addWebSocketHandler,
   removeWebSocketHandler,
+  sendWebSocketMessage,
   bindWeChatSession,
   requestCallSubscribePermission,
   createCall,

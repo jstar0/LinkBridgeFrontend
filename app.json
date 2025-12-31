@@ -4,12 +4,10 @@
     "pages/linkbridge/login/login",
     "pages/linkbridge/register/register",
     "pages/linkbridge/dashboard/dashboard",
-    "pages/linkbridge/search/search",
     "pages/linkbridge/settings/settings",
     "pages/linkbridge/archive/archive",
     "pages/linkbridge/chat/chat",
     "pages/linkbridge/call/call",
-    "pages/linkbridge/friends/friends",
     "pages/linkbridge/add-friend/add-friend"
   ],
   "themeLocation": "theme.json",

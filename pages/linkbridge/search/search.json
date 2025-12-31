@@ -1,7 +1,0 @@
-{
-  "usingComponents": {
-    "t-empty": "tdesign-miniprogram/empty/empty",
-    "linkbridge-tabbar": "/components/linkbridge-tabbar/linkbridge-tabbar"
-  }
-}
-
