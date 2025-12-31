@@ -1,12 +1,11 @@
 import { SuperComponent, RelationsOptions, ComponentsOptionsType } from '../common/src/index';
-import { PickerItemOption } from './type';
 export default class PickerItem extends SuperComponent {
     relations: RelationsOptions;
     options: ComponentsOptionsType;
     externalClasses: string[];
     properties: import("./type").TdPickerItemProps;
     observers: {
-        'options, pickerKeys'(): void;
+        options(this: PickerItem): void;
     };
     data: {
         prefix: string;
@@ -16,11 +15,8 @@ export default class PickerItem extends SuperComponent {
         value: string;
         curIndex: number;
         columnIndex: number;
-        pickerKeys: {
-            value: string;
-            label: string;
-        };
-        formatOptions: PickerItemOption[];
+        labelAlias: string;
+        valueAlias: string;
     };
     lifetimes: {
         created(): void;
@@ -28,9 +24,10 @@ export default class PickerItem extends SuperComponent {
     methods: {
         onTouchStart(event: any): void;
         onTouchMove(event: any): void;
-        onTouchEnd(event: any): void;
-        formatOption(options: PickerItemOption[], columnIndex: number, format: any): any[];
+        onTouchEnd(): void;
         update(): void;
+        resetOrigin(): void;
         getCount(): any;
     };
+    calculateViewDeltaY(touchDeltaY: number, itemHeight: number): number;
 }

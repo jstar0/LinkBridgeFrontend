@@ -1,1 +1,6 @@
-const props={index:{type:null}};export default props;
+const props = {
+    index: {
+        type: null,
+    },
+};
+export default props;

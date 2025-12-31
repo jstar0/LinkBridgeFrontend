@@ -13,11 +13,10 @@ export default class TabPanel extends SuperComponent {
         active: boolean;
         hide: boolean;
         id: string;
-        hasActivated: boolean;
     };
     setId(id: any): void;
     observers: {
-        'label, badgeProps, disabled, icon, panel, value, lazy'(): void;
+        'label, badgeProps, disabled, icon, panel, value'(): void;
     };
     getComputedName(): string;
     update(): void;

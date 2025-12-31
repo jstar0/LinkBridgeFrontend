@@ -1,0 +1,8 @@
+<t-navbar title="语音通话" left-arrow />
+<view class="page call">
+  <view class="call__content">
+    <view class="call__title">通话页面待接入</view>
+    <view class="call__desc">后续会把 LinkBridge 的 1v1 语音通话迁移到这里。</view>
+  </view>
+</view>
+

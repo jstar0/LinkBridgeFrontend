@@ -10,7 +10,7 @@ export default class Link extends SuperComponent {
         classPrefix: string;
     };
     observers: {
-        'theme, disabled, size, underline, navigatorProps'(): void;
+        'theme, status, size, underline, navigatorProps'(): void;
         prefixIcon(v: any): void;
         suffixIcon(v: any): void;
     };

@@ -1,92 +1,66 @@
-import gulpError from './utils/gulpError';
+// app.js
+import config from './config';
+import Mock from './mock/index';
+import createBus from './utils/eventBus';
+import { connectSocket, fetchUnreadNum } from './mock/chat';
 
-const api = require('./utils/linkbridge/api');
-
-let callHandlerRegistered = false;
-let lastInviteCallId = '';
-
-const SUBSCRIBE_PROMPTED_KEY = 'lb_call_subscribe_prompted_v1';
-const WECHAT_BIND_TS_KEY = 'lb_wechat_bound_at_ms_v1';
-
-function safeGetStorageSync(key) {
-  try {
-    return wx.getStorageSync(key);
-  } catch (e) {
-    return null;
-  }
-}
-
-function safeSetStorageSync(key, value) {
-  try {
-    wx.setStorageSync(key, value);
-    return true;
-  } catch (e) {
-    return false;
-  }
+if (config.isMock) {
+  Mock();
 }
 
 App({
-  onShow() {
-    if (gulpError !== 'gulpErrorPlaceHolder') {
-      wx.redirectTo({
-        url: `/pages/gulp-error/index?gulpError=${gulpError}`,
-      });
-      return;
-    }
+  onLaunch() {
+    const updateManager = wx.getUpdateManager();
 
-    if (!api.isLoggedIn()) return;
-    api.connectWebSocket();
+    updateManager.onCheckForUpdate((res) => {
+      // console.log(res.hasUpdate)
+    });
 
-    // Best effort: keep WeChat session bound for VoIP signature / offline subscribe messages.
-    const lastBindAt = Number(safeGetStorageSync(WECHAT_BIND_TS_KEY) || 0);
-    const now = Date.now();
-    if (!Number.isFinite(lastBindAt) || now-lastBindAt > 12 * 60 * 60 * 1000) {
-      api
-        .bindWeChatSession()
-        .catch(() => null)
-        .then(() => safeSetStorageSync(WECHAT_BIND_TS_KEY, Date.now()));
-    }
-
-    // Best effort: ask each user once to enable call notifications (subscribe message).
-    const prompted = !!safeGetStorageSync(SUBSCRIBE_PROMPTED_KEY);
-    if (!prompted) {
-      api
-        .requestCallSubscribePermission()
-        .catch(() => null)
-        .then(() => safeSetStorageSync(SUBSCRIBE_PROMPTED_KEY, true));
-    }
-
-    if (callHandlerRegistered) return;
-    callHandlerRegistered = true;
-
-    api.addWebSocketHandler((data) => {
-      if (data?.type !== 'call.invite') return;
-
-      const call = data?.payload?.call;
-      const callId = call?.id || '';
-      if (!callId) return;
-      if (callId === lastInviteCallId) return;
-      lastInviteCallId = callId;
-
-      const callerName = data?.payload?.caller?.displayName || '对方';
-
+    updateManager.onUpdateReady(() => {
       wx.showModal({
-        title: '语音通话',
-        content: `${callerName} 邀请你语音通话`,
-        confirmText: '接听',
-        cancelText: '拒绝',
-        success: (res) => {
+        title: '更新提示',
+        content: '新版本已经准备好，是否重启应用？',
+        success(res) {
           if (res.confirm) {
-            const url =
-              `/pages/linkbridge/call/call?callId=${encodeURIComponent(callId)}` +
-              `&incoming=1&autoAccept=1` +
-              (callerName ? `&peerName=${encodeURIComponent(callerName)}` : '');
-            wx.navigateTo({ url });
-          } else if (res.cancel) {
-            api.rejectCall(callId).catch(() => null);
+            updateManager.applyUpdate();
           }
         },
       });
     });
+
+    this.getUnreadNum();
+    this.connect();
+  },
+  globalData: {
+    userInfo: null,
+    unreadNum: 0, // 未读消息数量
+    socket: null, // SocketTask 对象
+  },
+
+  /** 全局事件总线 */
+  eventBus: createBus(),
+
+  /** 初始化WebSocket */
+  connect() {
+    const socket = connectSocket();
+    socket.onMessage((data) => {
+      data = JSON.parse(data);
+      if (data.type === 'message' && !data.data.message.read) this.setUnreadNum(this.globalData.unreadNum + 1);
+    });
+    this.globalData.socket = socket;
+  },
+
+  /** 获取未读消息数量 */
+  getUnreadNum() {
+    fetchUnreadNum().then(({ data }) => {
+      this.globalData.unreadNum = data;
+      this.eventBus.emit('unread-num-change', data);
+    });
+  },
+
+  /** 设置未读消息数量 */
+  setUnreadNum(unreadNum) {
+    this.globalData.unreadNum = unreadNum;
+    this.eventBus.emit('unread-num-change', unreadNum);
   },
 });

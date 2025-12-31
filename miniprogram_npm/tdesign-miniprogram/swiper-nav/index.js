@@ -1,1 +1,3 @@
-export*from"./type";export*from"./props";export*from"./swiper-nav";
+export * from './type';
+export * from './props';
+export * from './swiper-nav';

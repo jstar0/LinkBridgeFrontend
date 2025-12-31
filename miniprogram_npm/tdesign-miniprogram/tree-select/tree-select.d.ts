@@ -55,6 +55,6 @@ export default class TreeSelect extends SuperComponent {
         getScrollIntoView(status: string): void;
         onRootChange(e: any): void;
         handleTreeClick(e: any): void;
-        handleChange(e: any): void;
+        handleRadioChange(e: any): void;
     };
 }

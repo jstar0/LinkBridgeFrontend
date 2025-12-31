@@ -32,7 +32,7 @@ export default class DropdownMenuItem extends SuperComponent {
     observers: {
         keys(obj: any): void;
         value(v: any): void;
-        'label, computedLabel, disabled'(): void;
+        'label, computedLabel'(): void;
         show(visible: any): void;
     };
     methods: {

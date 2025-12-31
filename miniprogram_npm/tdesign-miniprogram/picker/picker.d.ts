@@ -9,6 +9,7 @@ export default class Picker extends SuperComponent {
     relations: RelationsOptions;
     observers: {
         'value, visible'(): void;
+        keys(obj: any): void;
     };
     lifetimes: {
         attached(): void;
@@ -16,6 +17,8 @@ export default class Picker extends SuperComponent {
     data: {
         prefix: string;
         classPrefix: string;
+        labelAlias: string;
+        valueAlias: string;
         defaultPopUpProps: {};
         defaultPopUpzIndex: number;
         pickItemHeight: number;

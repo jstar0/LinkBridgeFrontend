@@ -1,1 +1,9 @@
-const props={offset:{type:null},span:{type:null}};export default props;
+const props = {
+    offset: {
+        type: null,
+    },
+    span: {
+        type: null,
+    },
+};
+export default props;

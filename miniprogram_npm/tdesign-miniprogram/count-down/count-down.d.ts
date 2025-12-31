@@ -19,7 +19,6 @@ export default class CountDown extends SuperComponent {
         formattedTime: string;
     };
     timeoutId: null | number;
-    isInitialTime: boolean;
     lifetimes: {
         detached(): void;
     };

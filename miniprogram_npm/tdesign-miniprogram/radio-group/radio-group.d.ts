@@ -1,6 +1,5 @@
 import { SuperComponent, RelationsOptions } from '../common/src/index';
 export default class RadioGroup extends SuperComponent {
-    behaviors: string[];
     externalClasses: string[];
     data: {
         prefix: string;

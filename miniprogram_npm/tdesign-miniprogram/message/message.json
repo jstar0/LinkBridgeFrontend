@@ -1,1 +1,7 @@
-{"component":true,"styleIsolation":"apply-shared","usingComponents":{"t-message-item":"../message-item/message-item"}}
+{
+  "component": true,
+  "styleIsolation": "apply-shared",
+  "usingComponents": {
+    "t-message-item": "../message-item/message-item"
+  }
+}
