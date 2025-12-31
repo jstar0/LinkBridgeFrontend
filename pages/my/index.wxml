@@ -25,7 +25,7 @@
         <t-avatar slot="left-icon" icon="user" size="128rpx" />
       </t-cell>
 
-      <t-cell wx:if="{{isLoggedIn}}" title="服务器地址" note="{{serverUrl}}" arrow bind:click="onTapServer">
+      <t-cell title="服务器地址" note="{{serverUrl}}" arrow bind:click="onTapServer">
         <t-icon slot="left-icon" name="link" />
       </t-cell>
 
