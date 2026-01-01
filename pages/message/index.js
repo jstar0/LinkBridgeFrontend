@@ -17,6 +17,9 @@ Page({
 
   /** 生命周期函数--监听页面显示 */
   onShow() {
+    const tabBar = typeof this.getTabBar === 'function' ? this.getTabBar() : null;
+    if (tabBar && typeof tabBar.setActive === 'function') tabBar.setActive('message');
+
     if (!api.isLoggedIn()) {
       wx.navigateTo({ url: '/pages/login/login' });
       return;

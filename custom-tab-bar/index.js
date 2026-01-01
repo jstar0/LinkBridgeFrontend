@@ -40,9 +40,11 @@ Component({
       if (!value) return;
       if (value === this.data.value) return;
 
-      // Update indicator immediately so the underline animation is visible.
-      this.setValue(value);
-      wx.switchTab({ url: `/pages/${value}/index` });
+      const indicatorLeft = value === 'my' ? '50%' : '0%';
+      // Ensure the underline updates on the first tap (setData callback before switchTab).
+      this.setData({ value, indicatorLeft }, () => {
+        wx.switchTab({ url: `/pages/${value}/index` });
+      });
     },
 
     /** 设置未读消息数量 */
@@ -56,6 +58,13 @@ Component({
         value,
         indicatorLeft: value === 'my' ? '50%' : '0%',
       });
+    },
+
+    // Allow pages to force-sync the selected tab on show.
+    setActive(value) {
+      if (!value) return;
+      if (value === this.data.value) return;
+      this.setValue(value);
     },
 
     syncRouteValue() {

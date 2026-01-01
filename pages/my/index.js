@@ -36,6 +36,9 @@ Page({
   onLoad() {},
 
   onShow() {
+    const tabBar = typeof this.getTabBar === 'function' ? this.getTabBar() : null;
+    if (tabBar && typeof tabBar.setActive === 'function') tabBar.setActive('my');
+
     if (!api.isLoggedIn()) {
       this.setData({ isLoad: false, personalInfo: {} });
       return;

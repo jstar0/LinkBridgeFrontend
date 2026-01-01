@@ -24,6 +24,14 @@
   justify-content: center;
 }
 
+.lb-tabbar__tab-inner {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+}
+
 .lb-tabbar__label {
   font-size: @font-size-small;
   color: @gy2;
@@ -36,9 +44,8 @@
 }
 
 .lb-tabbar__dot {
-  position: absolute;
-  top: 28rpx;
-  right: 40%;
+  position: relative;
+  margin-left: 10rpx;
   width: 16rpx;
   height: 16rpx;
   border-radius: 50%;
