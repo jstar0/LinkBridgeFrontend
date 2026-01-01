@@ -221,50 +221,110 @@ Page({
 
   sendFile() {
     if (this.data.sending) return;
-    if (typeof wx?.chooseMessageFile !== 'function') {
-      wx.showToast({ title: '当前环境不支持选择文件', icon: 'none' });
-      return;
-    }
 
-    this.setData({ sending: true });
-    new Promise((resolve, reject) => {
-      wx.chooseMessageFile({
-        count: 1,
-        type: 'file',
-        success: (r) => resolve(r),
-        fail: (e) => reject(e),
+    const chooseFileFromWechat = () =>
+      new Promise((resolve, reject) => {
+        if (typeof wx?.chooseMessageFile !== 'function') {
+          reject(new Error('chooseMessageFile not supported'));
+          return;
+        }
+        wx.chooseMessageFile({
+          count: 1,
+          type: 'file',
+          success: (r) => {
+            const file = r?.tempFiles?.[0];
+            resolve({
+              path: file?.path || '',
+              name: file?.name || '',
+              size: file?.size || 0,
+            });
+          },
+          fail: (e) => reject(e),
+        });
       });
-    })
-      .then((r) => {
-        const file = r?.tempFiles?.[0];
-        const filePath = file?.path || '';
-        const name = file?.name || '';
-        if (!filePath) throw new Error('missing file');
-        wx.showLoading({ title: '上传中...' });
-        return api.uploadFile(filePath, name);
-      })
-      .then((up) => {
-        const meta = {
-          name: up?.name || 'file',
-          sizeBytes: up?.sizeBytes || 0,
-          url: up?.url || '',
+
+    wx.showActionSheet({
+      itemList: ['从本地选择文件', '从微信聊天记录选择文件'],
+      success: (res) => {
+        const mode = res?.tapIndex === 0 ? 'local' : 'chat';
+
+        this.setData({ sending: true });
+
+        const maybePrompt = () => {
+          if (mode !== 'local') return Promise.resolve();
+          // WeChat Mini Program does not expose a universal "system file picker" API.
+          // In many environments, the file chooser UI may still only show WeChat conversations.
+          return new Promise((resolve) => {
+            const tipKey = 'lb_local_file_tip_shown_v1';
+            try {
+              if (wx.getStorageSync(tipKey)) {
+                resolve();
+                return;
+              }
+            } catch (e) {
+              // ignore
+            }
+            wx.showModal({
+              title: '选择本地文件',
+              content:
+                '如果选择器里没有「本地文件/手机文件」，说明当前微信环境不支持直接选择本地文件。你可以先把文件发送到「文件传输助手」或任意聊天，再在下一步从聊天记录选择。',
+              showCancel: false,
+              success: () => {
+                try {
+                  wx.setStorageSync(tipKey, true);
+                } catch (e) {
+                  // ignore
+                }
+                resolve();
+              },
+              fail: () => resolve(),
+            });
+          });
         };
-        return api.sendFileMessage(this.data.sessionId, meta);
-      })
-      .then((msg) => {
-        wx.hideLoading();
-        const myId = this.data.myUserId || api.getUser()?.id || '';
-        const vm = buildViewMessage(msg, myId);
-        const id = vm?.messageId || '';
-        if (id && this.data.messages.some((m) => m.messageId === id)) return;
-        this.setData({ messages: [...this.data.messages, vm], sending: false });
-        wx.nextTick(this.scrollToBottom);
-      })
-      .catch(() => {
-        wx.hideLoading();
-        this.setData({ sending: false });
-        wx.showToast({ title: '发送失败', icon: 'none' });
-      });
+
+        maybePrompt()
+          .then(() => chooseFileFromWechat())
+          .then(({ path, name }) => {
+            if (!path) throw new Error('missing file');
+            wx.showLoading({ title: '上传中...' });
+            return api.uploadFile(path, name);
+          })
+          .then((up) => {
+            const meta = {
+              name: up?.name || 'file',
+              sizeBytes: up?.sizeBytes || 0,
+              url: up?.url || '',
+            };
+            return api.sendFileMessage(this.data.sessionId, meta);
+          })
+          .then((msg) => {
+            wx.hideLoading();
+            const myId = this.data.myUserId || api.getUser()?.id || '';
+            const vm = buildViewMessage(msg, myId);
+            const id = vm?.messageId || '';
+            if (id && this.data.messages.some((m) => m.messageId === id)) return;
+            this.setData({ messages: [...this.data.messages, vm], sending: false });
+            wx.nextTick(this.scrollToBottom);
+          })
+          .catch((err) => {
+            wx.hideLoading();
+            this.setData({ sending: false });
+
+            const msg = String(err?.errMsg || err?.message || '');
+            if (msg.toLowerCase().includes('cancel')) {
+              return;
+            }
+            if (msg.toLowerCase().includes('choosemessagefile not supported')) {
+              wx.showToast({ title: '当前环境不支持选择文件', icon: 'none' });
+              return;
+            }
+            wx.showToast({ title: '发送失败', icon: 'none' });
+          });
+      },
+      fail: () => {
+        // canceled
+      },
+    });
   },
 
   getFileUrl(meta) {
