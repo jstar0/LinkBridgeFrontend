@@ -25,3 +25,20 @@ page {
 .content.unread > view {
   width: 510rpx;
 }
+
+/* Fix: unread badge (t-badge) must stay inside the cell right area.
+   Without an inner content slot, TDesign treats it like a corner badge and may overflow. */
+.wrapper {
+  margin-right: 16rpx;
+}
+
+.wrapper .t-badge__content {
+  display: none !important;
+}
+
+.wrapper .t-has-count {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+}
