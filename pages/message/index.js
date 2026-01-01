@@ -1,4 +1,5 @@
 const api = require('../../utils/linkbridge/api');
+const app = getApp();
 
 Page({
   /** 页面的初始数据 */
@@ -68,6 +69,18 @@ Page({
         const msg = env?.payload?.message;
         const sid = msg?.sessionId;
         if (!sid) return;
+
+        // If user is currently viewing this session in chat, do not mark it as unread.
+        try {
+          const pages = getCurrentPages();
+          const cur = pages[pages.length - 1];
+          if (cur?.route === 'pages/chat/index') {
+            const openSid = cur?.data?.sessionId || cur?.options?.sessionId || '';
+            if (openSid && openSid === sid) return;
+          }
+        } catch (e) {
+          // ignore
+        }
 
         const next = [...this.data.sessions];
         const idx = next.findIndex((s) => s.id === sid);
@@ -160,8 +173,15 @@ Page({
     if (!session?.id) return;
 
     // Reset unread count locally when opening.
+    const consumed = Number(session.unreadCount || 0) || 0;
     const sessions = this.data.sessions.map((s) => (s.id === session.id ? { ...s, unreadCount: 0 } : s));
     this.setData({ sessions });
+
+    // Best-effort: decrease global unread dot for tab bar.
+    if (consumed > 0 && typeof app?.setUnreadNum === 'function') {
+      const cur = Number(app.globalData?.unreadNum || 0) || 0;
+      app.setUnreadNum(Math.max(0, cur - consumed));
+    }
 
     const peerName = session?.peer?.displayName || '';
     const peerUserId = session?.peer?.id || '';

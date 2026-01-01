@@ -45,3 +45,20 @@ page {
   display: flex;
   align-items: center;
 }
+
+/* Fix: t-badge without content will render count as absolute "top-right" and may overflow slot.
+   Make the badge a standalone pill within the cell right-icon area. */
+.wrapper {
+  margin-right: 16rpx;
+}
+
+.wrapper .t-badge__content {
+  display: none !important;
+}
+
+.wrapper .t-has-count {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+}

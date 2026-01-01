@@ -12,6 +12,17 @@ function getCurrentRoute() {
   }
 }
 
+function getCurrentChatSessionId() {
+  try {
+    const pages = getCurrentPages();
+    const cur = pages[pages.length - 1];
+    if (cur?.route !== 'pages/chat/index') return '';
+    return cur?.data?.sessionId || cur?.options?.sessionId || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 let wsRegistered = false;
 const WECHAT_BIND_TS_KEY = 'lb_wechat_bound_at_ms_v1';
 
@@ -60,9 +71,15 @@ App({
     api.addWebSocketHandler((env) => {
       if (env?.type !== 'message.created') return;
 
-      // Best-effort unread badge: if user is currently in chat page, don't increment.
+      const msg = env?.payload?.message;
+      const sid = msg?.sessionId || '';
+
+      // Best-effort unread badge: if user is currently in the same chat session, don't increment.
       const route = getCurrentRoute();
-      if (route === 'pages/chat/index') return;
+      if (route === 'pages/chat/index') {
+        const openSid = getCurrentChatSessionId();
+        if (openSid && sid && openSid === sid) return;
+      }
 
       this.setUnreadNum((this.globalData.unreadNum || 0) + 1);
     });
