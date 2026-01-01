@@ -1,52 +1,56 @@
-<nav nav-type="title" title-text="会话"></nav>
+<view class="lb-tabpage" animation="{{ pageAnim }}">
+  <nav nav-type="title" title-text="会话"></nav>
 
-<view wx:if="{{ incomingRequests.length > 0 }}" class="requests">
-  <view class="requests__title">新的会话请求</view>
-  <t-cell
-    wx:for="{{ incomingRequests }}"
-    wx:key="id"
-    t-class-image="avatar"
-    title="{{ item.user.displayName }}"
-    description="请求建立会话"
+  <view wx:if="{{ incomingRequests.length > 0 }}" class="requests">
+    <view class="requests__title">新的会话请求</view>
+    <t-cell
+      wx:for="{{ incomingRequests }}"
+      wx:key="id"
+      t-class-image="avatar"
+      title="{{ item.user.displayName }}"
+      description="请求建立会话"
+    >
+      <view slot="right-icon" class="requests__actions">
+        <t-button size="small" theme="primary" variant="base" bind:tap="onAcceptRequest" data-id="{{ item.id }}"
+          >接受</t-button
+        >
+        <t-button
+          size="small"
+          theme="default"
+          variant="outline"
+          style="margin-left: 16rpx;"
+          bind:tap="onRejectRequest"
+          data-id="{{ item.id }}"
+        >
+          拒绝
+        </t-button>
+      </view>
+    </t-cell>
+  </view>
+
+  <scroll-view
+    class="message-list"
+    scroll-y
+    refresher-enabled
+    refresher-triggered="{{ loading }}"
+    bindrefresherrefresh="getMessageList"
   >
-    <view slot="right-icon" class="requests__actions">
-      <t-button size="small" theme="primary" variant="base" bind:tap="onAcceptRequest" data-id="{{ item.id }}">接受</t-button>
-      <t-button
-        size="small"
-        theme="default"
-        variant="outline"
-        style="margin-left: 16rpx;"
-        bind:tap="onRejectRequest"
-        data-id="{{ item.id }}"
-      >
-        拒绝
-      </t-button>
-    </view>
-  </t-cell>
+    <t-cell
+      wx:for="{{ sessions }}"
+      wx:key="id"
+      t-class-image="avatar"
+      t-class-description="content"
+      image="{{ item.avatar }}"
+      title="{{ item.peer.displayName }}"
+      description="{{ item.desc }}"
+      hover
+      bind:click="toChat"
+      bind:longpress="onLongPressSession"
+      data-session="{{ item }}"
+    >
+      <t-badge wx:if="{{ item.unreadCount > 0 }}" slot="right-icon" count="{{ item.unreadCount }}" class="wrapper" />
+    </t-cell>
+  </scroll-view>
+
+  <scan-fab />
 </view>
-
-<scroll-view
-  class="message-list"
-  scroll-y
-  refresher-enabled
-  refresher-triggered="{{ loading }}"
-  bindrefresherrefresh="getMessageList"
->
-  <t-cell
-    wx:for="{{ sessions }}"
-    wx:key="id"
-    t-class-image="avatar"
-    t-class-description="content"
-    image="{{ item.avatar }}"
-    title="{{ item.peer.displayName }}"
-    description="{{ item.desc }}"
-    hover
-    bind:click="toChat"
-    bind:longpress="onLongPressSession"
-    data-session="{{ item }}"
-  >
-    <t-badge wx:if="{{ item.unreadCount > 0 }}" slot="right-icon" count="{{ item.unreadCount }}" class="wrapper" />
-  </t-cell>
-</scroll-view>
-
-<scan-fab />

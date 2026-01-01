@@ -1,9 +1,11 @@
 const app = getApp();
+const { recordTabTransition } = require('../utils/linkbridge/tab-transition');
 
 Component({
   data: {
     value: '', // 初始值设置为空，避免第一次加载时闪烁
     unreadNum: 0, // 未读消息数量
+    indicatorTranslate: '0%',
     list: [
       {
         icon: 'chat',
@@ -19,17 +21,7 @@ Component({
   },
   lifetimes: {
     ready() {
-      const pages = getCurrentPages();
-      const curPage = pages[pages.length - 1];
-      if (curPage) {
-        const nameRe = /pages\/(\w+)\/index/.exec(curPage.route);
-        if (nameRe === null) return;
-        if (nameRe[1] && nameRe) {
-          this.setData({
-            value: nameRe[1],
-          });
-        }
-      }
+      this.syncRouteValue();
 
       // 同步全局未读消息数量
       this.setUnreadNum(app.globalData.unreadNum);
@@ -38,15 +30,41 @@ Component({
       });
     },
   },
+  pageLifetimes: {
+    show() {
+      this.syncRouteValue();
+    },
+  },
   methods: {
-    handleChange(e) {
-      const { value } = e.detail;
+    onTap(e) {
+      const value = e?.currentTarget?.dataset?.value || '';
+      if (!value) return;
+      if (value === this.data.value) return;
+
+      recordTabTransition(this.data.value, value);
       wx.switchTab({ url: `/pages/${value}/index` });
     },
 
     /** 设置未读消息数量 */
     setUnreadNum(unreadNum) {
       this.setData({ unreadNum });
+    },
+
+    setValue(value) {
+      if (!value) return;
+      this.setData({
+        value,
+        indicatorTranslate: value === 'my' ? '100%' : '0%',
+      });
+    },
+
+    syncRouteValue() {
+      const pages = getCurrentPages();
+      const curPage = pages[pages.length - 1];
+      const route = curPage?.route || '';
+      const match = /pages\/(\w+)\/index/.exec(route);
+      const value = match?.[1] || '';
+      if (value === 'message' || value === 'my') this.setValue(value);
     },
   },
 });

@@ -1,4 +1,15 @@
-<t-tab-bar value="{{ value }}" theme="tag" split="{{ false }}" bind:change="handleChange">
-  <t-tab-bar-item icon="chat" value="message" badge-props="{{ { count: unreadNum } }}">会话</t-tab-bar-item>
-  <t-tab-bar-item icon="user" value="my">我的</t-tab-bar-item>
-</t-tab-bar>
+<view class="lb-tabbar">
+  <view class="lb-tabbar__tabs">
+    <view class="lb-tabbar__tab {{ value === 'message' ? 'is-active' : '' }}" data-value="message" bindtap="onTap">
+      <text class="lb-tabbar__label">会话</text>
+      <view wx:if="{{ unreadNum > 0 }}" class="lb-tabbar__dot" />
+    </view>
+    <view class="lb-tabbar__tab {{ value === 'my' ? 'is-active' : '' }}" data-value="my" bindtap="onTap">
+      <text class="lb-tabbar__label">我的</text>
+    </view>
+
+    <view class="lb-tabbar__indicator" style="transform: translateX({{ indicatorTranslate }});">
+      <view class="lb-tabbar__indicator-bar" />
+    </view>
+  </view>
+</view>
