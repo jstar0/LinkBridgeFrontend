@@ -1,11 +1,10 @@
 const app = getApp();
-const { recordTabTransition } = require('../utils/linkbridge/tab-transition');
 
 Component({
   data: {
     value: '', // 初始值设置为空，避免第一次加载时闪烁
     unreadNum: 0, // 未读消息数量
-    indicatorTranslate: '0%',
+    indicatorLeft: '0%',
     list: [
       {
         icon: 'chat',
@@ -41,7 +40,8 @@ Component({
       if (!value) return;
       if (value === this.data.value) return;
 
-      recordTabTransition(this.data.value, value);
+      // Update indicator immediately so the underline animation is visible.
+      this.setValue(value);
       wx.switchTab({ url: `/pages/${value}/index` });
     },
 
@@ -54,7 +54,7 @@ Component({
       if (!value) return;
       this.setData({
         value,
-        indicatorTranslate: value === 'my' ? '100%' : '0%',
+        indicatorLeft: value === 'my' ? '50%' : '0%',
       });
     },
 

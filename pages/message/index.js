@@ -1,13 +1,12 @@
 const api = require('../../utils/linkbridge/api');
-const { applyTabTransition } = require('../../utils/linkbridge/tab-transition');
 
 Page({
   /** 页面的初始数据 */
   data: {
     sessions: [],
-    loading: true, // 是否正在加载（用于下拉刷新）
+    loading: true, // 是否正在加载（用于拉取列表）
+    refreshing: false, // t-pull-down-refresh state
     incomingRequests: [],
-    pageAnim: null,
   },
 
   /** 生命周期函数--监听页面加载 */
@@ -23,7 +22,6 @@ Page({
       return;
     }
 
-    applyTabTransition(this, 'message');
     api.connectWebSocket();
     this.getMessageList();
     this.getIncomingRequests();
@@ -107,7 +105,7 @@ Page({
   /** 获取会话列表 */
   getMessageList() {
     this.setData({ loading: true });
-    api
+    return api
       .listSessions('active')
       .then((sessions) => {
         const decorated = (sessions || []).map((s) => ({
@@ -124,8 +122,20 @@ Page({
       });
   },
 
+  onRefresh() {
+    if (this.data.refreshing) return;
+    this.setData({ refreshing: true });
+
+    Promise.allSettled([this.getMessageList(), this.getIncomingRequests()])
+      .catch(() => null)
+      .finally(() => {
+        // brief delay to feel like "snap back" (similar to model)
+        setTimeout(() => this.setData({ refreshing: false }), 260);
+      });
+  },
+
   getIncomingRequests() {
-    api
+    return api
       .listSessionRequests('in', 'pending')
       .then((requests) => {
         const items = (requests || []).slice(0, 10);

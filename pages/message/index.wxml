@@ -1,6 +1,11 @@
-<view class="lb-tabpage" animation="{{ pageAnim }}">
-  <nav nav-type="title" title-text="会话"></nav>
+<nav nav-type="title" title-text="会话"></nav>
 
+<t-pull-down-refresh
+  value="{{ refreshing }}"
+  using-custom-navbar="{{ true }}"
+  loadingTexts="{{['...', '松手刷新', '正在刷新', '刷新完成']}}"
+  bind:refresh="onRefresh"
+>
   <view wx:if="{{ incomingRequests.length > 0 }}" class="requests">
     <view class="requests__title">新的会话请求</view>
     <t-cell
@@ -28,29 +33,24 @@
     </t-cell>
   </view>
 
-  <scroll-view
-    class="message-list"
-    scroll-y
-    refresher-enabled
-    refresher-triggered="{{ loading }}"
-    bindrefresherrefresh="getMessageList"
+  <t-cell
+    wx:for="{{ sessions }}"
+    wx:key="id"
+    t-class-image="avatar"
+    t-class-description="content"
+    image="{{ item.avatar }}"
+    title="{{ item.peer.displayName }}"
+    description="{{ item.desc }}"
+    hover
+    bind:click="toChat"
+    bind:longpress="onLongPressSession"
+    data-session="{{ item }}"
   >
-    <t-cell
-      wx:for="{{ sessions }}"
-      wx:key="id"
-      t-class-image="avatar"
-      t-class-description="content"
-      image="{{ item.avatar }}"
-      title="{{ item.peer.displayName }}"
-      description="{{ item.desc }}"
-      hover
-      bind:click="toChat"
-      bind:longpress="onLongPressSession"
-      data-session="{{ item }}"
-    >
-      <t-badge wx:if="{{ item.unreadCount > 0 }}" slot="right-icon" count="{{ item.unreadCount }}" class="wrapper" />
-    </t-cell>
-  </scroll-view>
+    <t-badge wx:if="{{ item.unreadCount > 0 }}" slot="right-icon" count="{{ item.unreadCount }}" class="wrapper" />
+  </t-cell>
 
-  <scan-fab />
-</view>
+  <!-- keep content above the custom bottom tab bar -->
+  <view class="lb-tabbar-spacer" />
+</t-pull-down-refresh>
+
+<scan-fab />

@@ -8,7 +8,7 @@
       <text class="lb-tabbar__label">我的</text>
     </view>
 
-    <view class="lb-tabbar__indicator" style="transform: translateX({{ indicatorTranslate }});">
+    <view class="lb-tabbar__indicator" style="left: {{ indicatorLeft }};">
       <view class="lb-tabbar__indicator-bar" />
     </view>
   </view>

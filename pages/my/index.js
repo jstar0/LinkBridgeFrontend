@@ -1,7 +1,6 @@
 import useToastBehavior from '~/behaviors/useToast';
 
 const api = require('../../utils/linkbridge/api');
-const { applyTabTransition } = require('../../utils/linkbridge/tab-transition');
 
 const DEFAULT_SERVICE = [
   { image: '/static/icon_wx.png', name: '微信', type: 'weixin', url: '' },
@@ -21,7 +20,6 @@ Page({
     isLoad: false,
     service: DEFAULT_SERVICE,
     personalInfo: {},
-    pageAnim: null,
     gridList: [
       { name: '全部发布', icon: 'root-list', type: 'all', url: '' },
       { name: '审核中', icon: 'search', type: 'progress', url: '' },
@@ -38,7 +36,6 @@ Page({
   onLoad() {},
 
   onShow() {
-    applyTabTransition(this, 'my');
     if (!api.isLoggedIn()) {
       this.setData({ isLoad: false, personalInfo: {} });
       return;
