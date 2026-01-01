@@ -31,14 +31,3 @@ page {
 .wrapper {
   margin-right: 16rpx;
 }
-
-.wrapper .t-badge__content {
-  display: none !important;
-}
-
-.wrapper .t-has-count {
-  position: relative !important;
-  left: auto !important;
-  top: auto !important;
-  transform: none !important;
-}
