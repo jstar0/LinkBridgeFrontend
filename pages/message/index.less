@@ -46,8 +46,16 @@ page {
   align-items: center;
 }
 
-/* Fix: t-badge without content will render count as absolute "top-right" and may overflow slot.
-   Make the badge a standalone pill within the cell right-icon area. */
-.wrapper {
+.lb-unread-badge {
+  min-width: 40rpx;
+  height: 40rpx;
+  padding: 0 12rpx;
+  border-radius: 999rpx;
+  background: #fa5151;
+  color: #fff;
+  font-size: 24rpx;
+  line-height: 40rpx;
+  text-align: center;
+  box-sizing: border-box;
   margin-right: 16rpx;
 }

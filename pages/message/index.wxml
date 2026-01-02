@@ -46,12 +46,9 @@
     bind:longpress="onLongPressSession"
     data-session="{{ item }}"
   >
-    <t-badge
-      wx:if="{{ item.unreadCount > 0 }}"
-      slot="right-icon"
-      count="{{ item.unreadCount }}"
-      class="wrapper"
-    />
+    <view wx:if="{{ item.unreadCount > 0 }}" slot="right-icon" class="lb-unread-badge">
+      {{ item.unreadCount > 99 ? '99+' : item.unreadCount }}
+    </view>
   </t-cell>
 
   <!-- keep content above the custom bottom tab bar -->

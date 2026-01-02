@@ -41,6 +41,11 @@ Component({
     popupVisible: false,
     isLoggedIn: false,
     qrImagePath: '',
+    fabButtonProps: {
+      // Avoid prop type warnings inside TDesign template/button (loadingProps/style should not be null).
+      style: '',
+      loadingProps: {},
+    },
   },
 
   lifetimes: {

@@ -26,9 +26,18 @@ page {
   width: 510rpx;
 }
 
-/* Fix: move unread badge left so it never clips outside the screen */
-.wrapper {
-  transform: translateX(-64rpx);
+.lb-unread-badge {
+  min-width: 40rpx;
+  height: 40rpx;
+  padding: 0 12rpx;
+  border-radius: 999rpx;
+  background: #fa5151;
+  color: #fff;
+  font-size: 24rpx;
+  line-height: 40rpx;
+  text-align: center;
+  box-sizing: border-box;
+  margin-right: 16rpx;
 }
 
 /* Fix: unread badge (t-badge) must stay inside the cell right area.

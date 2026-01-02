@@ -1,6 +1,7 @@
 <t-fab
   icon="scan"
   style="right: 24rpx; bottom: calc(140rpx + env(safe-area-inset-bottom));"
+  button-props="{{fabButtonProps}}"
   bind:click="onOpen"
 />
 

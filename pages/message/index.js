@@ -34,9 +34,10 @@ Page({
       if (env?.type === 'session.created') {
         const session = env?.payload?.session;
         if (!session?.id) return;
+        const unreadMap = app?.globalData?.unreadBySession || {};
         const decorated = {
           ...session,
-          unreadCount: 0,
+          unreadCount: Number(unreadMap?.[session.id] || 0) || 0,
           avatar: (session && session.peer && session.peer.avatarUrl) || '/static/chat/avatar.png',
           desc: session && session.lastMessageText ? session.lastMessageText : ' ',
         };
@@ -90,7 +91,10 @@ Page({
         session.lastMessageText = msg?.text || session.lastMessageText || '';
         session.desc = msg?.text || session.desc || ' ';
         session.updatedAtMs = msg?.createdAtMs || session.updatedAtMs;
-        session.unreadCount = (session.unreadCount || 0) + 1;
+        const unreadMap = app?.globalData?.unreadBySession || {};
+        const fromMap = Number(unreadMap?.[sid] || 0) || 0;
+        const fromLocal = (Number(session.unreadCount || 0) || 0) + 1;
+        session.unreadCount = Math.max(fromLocal, fromMap);
 
         next.splice(idx, 1);
         next.unshift(session);
@@ -124,9 +128,10 @@ Page({
     return api
       .listSessions('active')
       .then((sessions) => {
+        const unreadMap = app?.globalData?.unreadBySession || {};
         const decorated = (sessions || []).map((s) => ({
           ...s,
-          unreadCount: 0,
+          unreadCount: Number(unreadMap?.[s?.id] || 0) || 0,
           avatar: (s && s.peer && s.peer.avatarUrl) || '/static/chat/avatar.png',
           desc: s && s.lastMessageText ? s.lastMessageText : ' ',
         }));
@@ -173,15 +178,11 @@ Page({
     if (!session?.id) return;
 
     // Reset unread count locally when opening.
-    const consumed = Number(session.unreadCount || 0) || 0;
     const sessions = this.data.sessions.map((s) => (s.id === session.id ? { ...s, unreadCount: 0 } : s));
     this.setData({ sessions });
 
-    // Best-effort: decrease global unread dot for tab bar.
-    if (consumed > 0 && typeof app?.setUnreadNum === 'function') {
-      const cur = Number(app.globalData?.unreadNum || 0) || 0;
-      app.setUnreadNum(Math.max(0, cur - consumed));
-    }
+    // Clear global per-session unread so tab bar dot updates correctly.
+    if (typeof app?.setSessionUnread === 'function') app.setSessionUnread(session.id, 0);
 
     const peerName = session?.peer?.displayName || '';
     const peerUserId = session?.peer?.id || '';

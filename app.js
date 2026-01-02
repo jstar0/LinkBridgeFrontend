@@ -29,6 +29,7 @@ const WECHAT_BIND_TS_KEY = 'lb_wechat_bound_at_ms_v1';
 App({
   globalData: {
     unreadNum: 0,
+    unreadBySession: {},
   },
 
   /** 全局事件总线（custom-tab-bar 依赖） */
@@ -81,7 +82,7 @@ App({
         if (openSid && sid && openSid === sid) return;
       }
 
-      this.setUnreadNum((this.globalData.unreadNum || 0) + 1);
+      this.incrementSessionUnread(sid, 1);
     });
 
     api.addWebSocketHandler((env) => {
@@ -117,5 +118,39 @@ App({
   setUnreadNum(unreadNum) {
     this.globalData.unreadNum = unreadNum;
     this.eventBus.emit('unread-num-change', unreadNum);
+  },
+
+  recalcUnreadNum() {
+    const map = this.globalData.unreadBySession || {};
+    let total = 0;
+    Object.keys(map).forEach((k) => {
+      const n = Number(map[k] || 0) || 0;
+      if (n > 0) total += n;
+    });
+    this.setUnreadNum(total);
+  },
+
+  setSessionUnread(sessionId, count) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+
+    const map = this.globalData.unreadBySession || {};
+    const next = Number(count || 0) || 0;
+    if (next > 0) map[sid] = next;
+    else delete map[sid];
+    this.globalData.unreadBySession = map;
+    this.recalcUnreadNum();
+  },
+
+  incrementSessionUnread(sessionId, delta = 1) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+    const map = this.globalData.unreadBySession || {};
+    const cur = Number(map[sid] || 0) || 0;
+    const next = Math.max(0, cur + (Number(delta || 0) || 0));
+    if (next > 0) map[sid] = next;
+    else delete map[sid];
+    this.globalData.unreadBySession = map;
+    this.recalcUnreadNum();
   },
 });
