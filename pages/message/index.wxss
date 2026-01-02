@@ -26,6 +26,11 @@ page {
   width: 510rpx;
 }
 
+/* Fix: move unread badge left so it never clips outside the screen */
+.wrapper {
+  transform: translateX(-64rpx);
+}
+
 /* Fix: unread badge (t-badge) must stay inside the cell right area.
    Without an inner content slot, TDesign treats it like a corner badge and may overflow. */
 .wrapper {

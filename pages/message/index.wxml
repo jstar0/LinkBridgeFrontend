@@ -50,7 +50,6 @@
       wx:if="{{ item.unreadCount > 0 }}"
       slot="right-icon"
       count="{{ item.unreadCount }}"
-      offset="{{[-80, 0]}}"
       class="wrapper"
     />
   </t-cell>
