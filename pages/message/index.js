@@ -1,6 +1,19 @@
 const api = require('../../utils/linkbridge/api');
 const app = getApp();
 
+function getSessionIdFromMessageEnv(env) {
+  const msg = env?.payload?.message;
+  return (
+    msg?.sessionId ||
+    msg?.sessionID ||
+    env?.payload?.sessionId ||
+    env?.payload?.sessionID ||
+    env?.sessionId ||
+    env?.sessionID ||
+    ''
+  );
+}
+
 Page({
   /** 页面的初始数据 */
   data: {
@@ -68,7 +81,7 @@ Page({
 
       if (env?.type === 'message.created') {
         const msg = env?.payload?.message;
-        const sid = msg?.sessionId;
+        const sid = getSessionIdFromMessageEnv(env);
         if (!sid) return;
 
         // If user is currently viewing this session in chat, do not mark it as unread.
@@ -83,6 +96,9 @@ Page({
           // ignore
         }
 
+        // Keep global unread map in sync even if App-level handler was not registered yet.
+        if (typeof app?.incrementSessionUnread === 'function') app.incrementSessionUnread(sid, 1);
+
         const next = [...this.data.sessions];
         const idx = next.findIndex((s) => s.id === sid);
         if (idx < 0) return;
@@ -91,10 +107,9 @@ Page({
         session.lastMessageText = msg?.text || session.lastMessageText || '';
         session.desc = msg?.text || session.desc || ' ';
         session.updatedAtMs = msg?.createdAtMs || session.updatedAtMs;
+
         const unreadMap = app?.globalData?.unreadBySession || {};
-        const fromMap = Number(unreadMap?.[sid] || 0) || 0;
-        const fromLocal = (Number(session.unreadCount || 0) || 0) + 1;
-        session.unreadCount = Math.max(fromLocal, fromMap);
+        session.unreadCount = Number(unreadMap?.[sid] || 0) || (Number(session.unreadCount || 0) || 0) + 1;
 
         next.splice(idx, 1);
         next.unshift(session);

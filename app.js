@@ -2,6 +2,8 @@ import createBus from './utils/eventBus';
 
 const api = require('./utils/linkbridge/api');
 
+const UNREAD_BY_SESSION_KEY = 'lb_unread_by_session_v1';
+
 function getCurrentRoute() {
   try {
     const pages = getCurrentPages();
@@ -23,6 +25,19 @@ function getCurrentChatSessionId() {
   }
 }
 
+function getSessionIdFromMessageEnv(env) {
+  const msg = env?.payload?.message;
+  return (
+    msg?.sessionId ||
+    msg?.sessionID ||
+    env?.payload?.sessionId ||
+    env?.payload?.sessionID ||
+    env?.sessionId ||
+    env?.sessionID ||
+    ''
+  );
+}
+
 let wsRegistered = false;
 const WECHAT_BIND_TS_KEY = 'lb_wechat_bound_at_ms_v1';
 
@@ -36,6 +51,18 @@ App({
   eventBus: createBus(),
 
   onLaunch() {
+    // Restore unread map (best-effort). This avoids losing unread state after a cold start.
+    try {
+      const raw = wx.getStorageSync(UNREAD_BY_SESSION_KEY);
+      if (raw) {
+        const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (obj && typeof obj === 'object') this.globalData.unreadBySession = obj;
+      }
+    } catch (e) {
+      // ignore
+    }
+    this.recalcUnreadNum();
+
     const updateManager = wx.getUpdateManager();
     updateManager.onUpdateReady(() => {
       wx.showModal({
@@ -72,8 +99,8 @@ App({
     api.addWebSocketHandler((env) => {
       if (env?.type !== 'message.created') return;
 
-      const msg = env?.payload?.message;
-      const sid = msg?.sessionId || '';
+      const sid = getSessionIdFromMessageEnv(env);
+      if (!sid) return;
 
       // Best-effort unread badge: if user is currently in the same chat session, don't increment.
       const route = getCurrentRoute();
@@ -139,6 +166,11 @@ App({
     if (next > 0) map[sid] = next;
     else delete map[sid];
     this.globalData.unreadBySession = map;
+    try {
+      wx.setStorageSync(UNREAD_BY_SESSION_KEY, JSON.stringify(map));
+    } catch (e) {
+      // ignore
+    }
     this.recalcUnreadNum();
   },
 
@@ -151,6 +183,11 @@ App({
     if (next > 0) map[sid] = next;
     else delete map[sid];
     this.globalData.unreadBySession = map;
+    try {
+      wx.setStorageSync(UNREAD_BY_SESSION_KEY, JSON.stringify(map));
+    } catch (e) {
+      // ignore
+    }
     this.recalcUnreadNum();
   },
 });
