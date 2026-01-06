@@ -178,7 +178,50 @@ Page({
   },
 
   onTapBack() {
-    wx.navigateBack();
+    if (this._exiting) return;
+
+    const callId = this.data.callId;
+    const status = this.data.status;
+    const hasActiveCall = status && !['idle', 'ended', 'failed'].includes(status);
+
+    if (!callId || !hasActiveCall) {
+      wx.navigateBack();
+      return;
+    }
+
+    this._exiting = true;
+    showModal({
+      title: '结束通话？',
+      content: '返回将结束当前通话。',
+      confirmText: '结束并返回',
+      cancelText: '继续通话',
+    })
+      .then((res) => {
+        if (!res?.confirm) {
+          this._exiting = false;
+          return;
+        }
+
+        // Decide which "end" action is appropriate for current state.
+        if (this.data.showHangup || status === 'accepted') {
+          this.onTapHangup();
+          return;
+        }
+        if (this.data.showCancel || status === 'outgoing' || status === 'ringing') {
+          this.onTapCancel();
+          return;
+        }
+        if (this.data.showReject || status === 'incoming') {
+          this.onTapReject();
+          return;
+        }
+
+        // Fallback: best-effort end.
+        this.onTapHangup();
+      })
+      .catch(() => {
+        this._exiting = false;
+      });
   },
 
   setupWebSocket(callId) {
