@@ -1,5 +1,8 @@
-<!-- delta=0 prevents built-in navigateBack so we can show confirm modal first -->
-<t-navbar title="{{navbarTitle}}" left-arrow delta="{{0}}" bindgo-back="onTapBack" />
+<t-navbar title="{{navbarTitle}}" left-arrow="{{false}}" delta="{{0}}">
+  <view slot="left" class="lb-call-back" bindtap="onTapBack">
+    <t-icon name="chevron-left" size="48rpx" />
+  </view>
+</t-navbar>
 
 <view class="page call">
   <!-- Video call UI -->
