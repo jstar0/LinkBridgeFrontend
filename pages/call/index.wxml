@@ -1,5 +1,5 @@
 <!-- delta=0 prevents built-in navigateBack so we can show confirm modal first -->
-<t-navbar title="{{navbarTitle}}" left-arrow delta="{{0}}" bind:go-back="onTapBack" />
+<t-navbar title="{{navbarTitle}}" left-arrow delta="{{0}}" bindgo-back="onTapBack" />
 
 <view class="page call">
   <!-- Video call UI -->
