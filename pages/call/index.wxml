@@ -1,8 +1,7 @@
-<t-navbar title="{{navbarTitle}}" left-arrow="{{false}}" delta="{{0}}">
-  <view slot="left" class="lb-call-back" bindtap="onTapBack">
-    <t-icon name="chevron-left" size="48rpx" />
-  </view>
-</t-navbar>
+<!-- Use built-in left arrow for visuals, but disable default navigateBack via delta=0.
+     Click handling is implemented via a fixed hot area to avoid navbar event binding issues in some environments. -->
+<t-navbar title="{{navbarTitle}}" left-arrow delta="{{0}}" />
+<view class="lb-call-back-hotarea" catchtap="onTapBack" />
 
 <view class="page call">
   <!-- Video call UI -->
