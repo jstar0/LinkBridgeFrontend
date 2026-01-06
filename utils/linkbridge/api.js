@@ -355,6 +355,13 @@ function sendAudioFrame(callId, base64Data) {
   sendWebSocketJson({ type: 'audio.frame', callId: cid, data });
 }
 
+function sendVideoFrame(callId, base64Data) {
+  const cid = String(callId || '').trim();
+  const data = String(base64Data || '').trim();
+  if (!cid || !data) return;
+  sendWebSocketJson({ type: 'video.frame', callId: cid, data });
+}
+
 module.exports = {
   getBaseUrl,
   getWsUrl,
@@ -399,4 +406,5 @@ module.exports = {
   removeWebSocketHandler,
   sendWebSocketJson,
   sendAudioFrame,
+  sendVideoFrame,
 };

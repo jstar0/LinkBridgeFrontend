@@ -111,6 +111,17 @@ Page({
   playIndex: 0,
   currentPlayPath: '',
   startedAudio: false,
+  // Jitter buffer: accumulate frames before playing
+  jitterBuffer: [],
+  jitterBufferSize: 3, // Wait for 3 frames before starting playback
+  jitterBufferStarted: false,
+  // Batch merge: combine multiple frames into one file
+  batchSize: 4, // Merge 4 frames into one WAV file
+  // Video call
+  cameraContext: null,
+  videoFrameTimer: null,
+  remoteCanvas: null,
+  remoteCanvasCtx: null,
 
   onLoad(query) {
     if (!api.isLoggedIn()) {
@@ -179,6 +190,14 @@ Page({
         if (payload?.callId !== callId) return;
         const b64 = payload?.data || '';
         if (b64) this.enqueueIncomingAudioFrame(b64);
+        return;
+      }
+
+      if (data?.type === 'video.frame') {
+        const payload = data?.payload || {};
+        if (payload?.callId !== callId) return;
+        const b64 = payload?.data || '';
+        if (b64) this.renderRemoteVideoFrame(b64);
         return;
       }
 
@@ -311,6 +330,11 @@ Page({
         });
 
         this.setStatus('in_call', '通话中');
+
+        // Start video capture if video call
+        if (this.data.mediaType === 'video') {
+          this.startVideoCapture();
+        }
       })
       .catch((err) => {
         console.error('Failed to start realtime audio:', err);
@@ -322,6 +346,11 @@ Page({
 
   stopRealtimeAudio() {
     this.startedAudio = false;
+    this.jitterBuffer = [];
+    this.jitterBufferStarted = false;
+
+    // Stop video capture
+    this.stopVideoCapture();
 
     if (this.recorder) {
       try {
@@ -358,18 +387,51 @@ Page({
   },
 
   enqueueIncomingAudioFrame(base64Data) {
-    // Wrap a single PCM frame into a WAV file and play sequentially.
-    const pcm = wx.base64ToArrayBuffer(base64Data);
+    // Add to jitter buffer first
+    this.jitterBuffer.push(base64Data);
+
+    // Wait until we have enough frames to start (jitter buffer)
+    if (!this.jitterBufferStarted) {
+      if (this.jitterBuffer.length < this.jitterBufferSize) {
+        return; // Keep buffering
+      }
+      this.jitterBufferStarted = true;
+    }
+
+    // Batch merge: wait for batchSize frames before writing
+    if (this.jitterBuffer.length < this.batchSize) {
+      return;
+    }
+
+    // Take batchSize frames and merge them
+    const framesToMerge = this.jitterBuffer.splice(0, this.batchSize);
+    this.writeMergedAudioFrames(framesToMerge);
+  },
+
+  writeMergedAudioFrames(base64Frames) {
+    // Convert all frames to PCM and merge
+    const pcmArrays = base64Frames.map((b64) => new Uint8Array(wx.base64ToArrayBuffer(b64)));
+    const totalSize = pcmArrays.reduce((sum, arr) => sum + arr.byteLength, 0);
+
+    // Merge all PCM data
+    const mergedPcm = new Uint8Array(totalSize);
+    let offset = 0;
+    for (const arr of pcmArrays) {
+      mergedPcm.set(arr, offset);
+      offset += arr.byteLength;
+    }
+
+    // Create WAV header for merged data
     const header = makeWavHeader({
       numChannels: 1,
       sampleRate: 16000,
       bitsPerSample: 16,
-      dataSize: pcm.byteLength,
+      dataSize: totalSize,
     });
 
-    const wav = new Uint8Array(header.byteLength + pcm.byteLength);
+    const wav = new Uint8Array(header.byteLength + totalSize);
     wav.set(new Uint8Array(header), 0);
-    wav.set(new Uint8Array(pcm), header.byteLength);
+    wav.set(mergedPcm, header.byteLength);
 
     const filePath = `${wx.env.USER_DATA_PATH}/lb_call_${Date.now()}_${this.playIndex++}.wav`;
     try {
@@ -424,6 +486,100 @@ Page({
     } catch (e) {
       this.currentPlayPath = '';
     }
+  },
+
+  // Video call methods
+  startVideoCapture() {
+    if (this.data.mediaType !== 'video') return;
+    if (this.videoFrameTimer) return;
+
+    const callId = this.data.callId;
+    if (!callId) return;
+
+    // Initialize camera context
+    this.cameraContext = wx.createCameraContext();
+
+    // Capture and send video frames at ~10 FPS
+    this.videoFrameTimer = setInterval(() => {
+      if (!this.startedAudio) return;
+
+      this.cameraContext.takePhoto({
+        quality: 'low',
+        success: (res) => {
+          // Read the image file and convert to base64
+          const fs = wx.getFileSystemManager();
+          fs.readFile({
+            filePath: res.tempImagePath,
+            encoding: 'base64',
+            success: (fileRes) => {
+              api.sendVideoFrame(callId, fileRes.data);
+              // Clean up temp file
+              fs.unlink({ filePath: res.tempImagePath });
+            },
+            fail: () => null,
+          });
+        },
+        fail: () => null,
+      });
+    }, 100); // 10 FPS
+  },
+
+  stopVideoCapture() {
+    if (this.videoFrameTimer) {
+      clearInterval(this.videoFrameTimer);
+      this.videoFrameTimer = null;
+    }
+    this.cameraContext = null;
+    this.remoteCanvas = null;
+    this.remoteCanvasCtx = null;
+  },
+
+  initRemoteCanvas() {
+    if (this.remoteCanvasCtx) return;
+
+    const query = wx.createSelectorQuery();
+    query
+      .select('#remoteVideo')
+      .fields({ node: true, size: true })
+      .exec((res) => {
+        if (!res?.[0]?.node) return;
+
+        const canvas = res[0].node;
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size to match display
+        const dpr = wx.getWindowInfo().pixelRatio;
+        canvas.width = res[0].width * dpr;
+        canvas.height = res[0].height * dpr;
+        ctx.scale(dpr, dpr);
+
+        this.remoteCanvas = canvas;
+        this.remoteCanvasCtx = ctx;
+      });
+  },
+
+  renderRemoteVideoFrame(base64Data) {
+    if (!this.remoteCanvasCtx) {
+      this.initRemoteCanvas();
+      return;
+    }
+
+    const canvas = this.remoteCanvas;
+    const ctx = this.remoteCanvasCtx;
+
+    // Create image from base64
+    const img = canvas.createImage();
+    img.onload = () => {
+      // Clear and draw the new frame
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = 'data:image/jpeg;base64,' + base64Data;
+  },
+
+  onCameraError(e) {
+    console.error('Camera error:', e);
+    wx.showToast({ title: '摄像头错误', icon: 'none' });
   },
 
   onTapAccept() {

@@ -5,6 +5,7 @@
   background: @bg-color;
   padding: 48rpx 32rpx;
   box-sizing: border-box;
+  position: relative;
 }
 
 .call__title {
@@ -30,3 +31,32 @@
   flex-wrap: wrap;
 }
 
+.call__actions--video {
+  position: absolute;
+  bottom: 80rpx;
+  left: 0;
+  right: 0;
+  margin-top: 0;
+}
+
+/* Video call styles */
+.video-remote {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  z-index: 1;
+}
+
+.video-local {
+  position: fixed;
+  top: 120rpx;
+  right: 32rpx;
+  width: 240rpx;
+  height: 320rpx;
+  border-radius: 16rpx;
+  z-index: 10;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+}

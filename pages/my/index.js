@@ -2,30 +2,12 @@ import useToastBehavior from '~/behaviors/useToast';
 
 const api = require('../../utils/linkbridge/api');
 
-const DEFAULT_SERVICE = [
-  { image: '/static/icon_wx.png', name: '微信', type: 'weixin', url: '' },
-  { image: '/static/icon_qq.png', name: 'QQ', type: 'QQ', url: '' },
-  { image: '/static/icon_doc.png', name: '腾讯文档', type: 'document', url: '' },
-  { image: '/static/icon_map.png', name: '腾讯地图', type: 'map', url: '' },
-  { image: '/static/icon_td.png', name: '数据中心', type: 'data', url: '' },
-  { image: '/static/icon_td.png', name: '数据中心', type: 'data', url: '' },
-  { image: '/static/icon_td.png', name: '数据中心', type: 'data', url: '' },
-  { image: '/static/icon_td.png', name: '数据中心', type: 'data', url: '' },
-];
-
 Page({
   behaviors: [useToastBehavior],
 
   data: {
     isLoad: false,
-    service: DEFAULT_SERVICE,
     personalInfo: {},
-    gridList: [
-      { name: '全部发布', icon: 'root-list', type: 'all', url: '' },
-      { name: '审核中', icon: 'search', type: 'progress', url: '' },
-      { name: '已发布', icon: 'upload', type: 'published', url: '' },
-      { name: '草稿箱', icon: 'file-copy', type: 'draft', url: '' },
-    ],
     settingList: [
       { name: '联系客服', icon: 'service', type: 'service' },
       { name: '设置', icon: 'setting', type: 'setting', url: '' },
