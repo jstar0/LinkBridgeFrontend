@@ -38,6 +38,11 @@
       "root": "pages/ai-chat",
       "name": "ai-chat",
       "pages": ["index"]
+    },
+    {
+      "root": "pages/peer",
+      "name": "peer",
+      "pages": ["index"]
     }
   ],
   "window": {

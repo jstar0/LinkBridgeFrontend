@@ -15,15 +15,19 @@ page {
   border-radius: 50% !important;
 }
 
+.lb-session-cell__center {
+  min-width: 0;
+}
+
+.content {
+  min-width: 0;
+}
+
 .content > view {
-  width: 560rpx;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.content.unread > view {
-  width: 510rpx;
 }
 
 .lb-tabbar-spacer {
@@ -57,5 +61,8 @@ page {
   line-height: 40rpx;
   text-align: center;
   box-sizing: border-box;
-  margin-right: 16rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }

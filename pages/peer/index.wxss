@@ -1,0 +1,38 @@
+.page.peer {
+  min-height: 100vh;
+  background: #f3f3f3;
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.peer__header {
+  display: flex;
+  align-items: center;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  background: #fff;
+  border-radius: 16rpx;
+}
+
+.peer__meta {
+  margin-left: 20rpx;
+  min-width: 0;
+}
+
+.peer__name {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.9);
+}
+
+.peer__sub {
+  margin-top: 6rpx;
+  font-size: 26rpx;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.peer__loading {
+  display: flex;
+  justify-content: center;
+  padding: 48rpx 0;
+}

@@ -1,0 +1,21 @@
+<t-navbar title="对方信息" left-arrow />
+
+<view class="page peer">
+  <view class="peer__header">
+    <t-avatar image="{{ user.avatarUrl || '/static/chat/avatar.png' }}" size="large" />
+    <view class="peer__meta">
+      <view class="peer__name">{{ user.displayName || '对方' }}</view>
+      <view wx:if="{{ user.username }}" class="peer__sub">@{{ user.username }}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{ loading }}" class="peer__loading">
+    <t-loading theme="spinner" size="48rpx" />
+  </view>
+
+  <t-cell-group wx:else theme="card">
+    <t-cell title="用户ID" note="{{ user.id || '-' }}" />
+    <t-cell title="昵称" note="{{ user.displayName || '-' }}" />
+    <t-cell title="账号" note="{{ user.username ? '@' + user.username : '-' }}" />
+  </t-cell-group>
+</view>

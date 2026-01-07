@@ -37,6 +37,7 @@
     wx:for="{{ sessions }}"
     wx:key="id"
     t-class-image="avatar"
+    t-class-center="lb-session-cell__center"
     t-class-description="content"
     image="{{ item.avatar }}"
     title="{{ item.peer.displayName }}"

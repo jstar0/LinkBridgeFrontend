@@ -456,8 +456,9 @@ Page({
       wx.showToast({ title: '缺少对方信息', icon: 'none' });
       return;
     }
-    this.setData({ peerProfileVisible: true });
-    this.loadPeerProfile(peerUserId);
+
+    const url = `/pages/peer/index?userId=${encodeURIComponent(peerUserId)}`;
+    wx.navigateTo({ url });
   },
 
   onClosePeerProfile() {
