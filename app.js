@@ -45,6 +45,8 @@ App({
   globalData: {
     unreadNum: 0,
     unreadBySession: {},
+    /** Whether App has installed the global unread WS handler. */
+    unreadWsReady: false,
   },
 
   /** 全局事件总线（custom-tab-bar 依赖） */
@@ -81,6 +83,7 @@ App({
     api.connectWebSocket();
     if (wsRegistered) return;
     wsRegistered = true;
+    this.globalData.unreadWsReady = true;
 
     // Best effort: keep WeChat session bound for VoIP signature.
     try {

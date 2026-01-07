@@ -96,8 +96,11 @@ Page({
           // ignore
         }
 
-        // Keep global unread map in sync even if App-level handler was not registered yet.
-        if (typeof app?.incrementSessionUnread === 'function') app.incrementSessionUnread(sid, 1);
+        // Keep global unread map in sync only when App-level handler is not ready yet.
+        // Otherwise this will double-increment (App handler + page handler).
+        if (!app?.globalData?.unreadWsReady && typeof app?.incrementSessionUnread === 'function') {
+          app.incrementSessionUnread(sid, 1);
+        }
 
         const next = [...this.data.sessions];
         const idx = next.findIndex((s) => s.id === sid);
@@ -109,7 +112,9 @@ Page({
         session.updatedAtMs = msg?.createdAtMs || session.updatedAtMs;
 
         const unreadMap = app?.globalData?.unreadBySession || {};
-        session.unreadCount = Number(unreadMap?.[sid] || 0) || (Number(session.unreadCount || 0) || 0) + 1;
+        const fromMap = Number(unreadMap?.[sid] || 0) || 0;
+        const prev = Number(session.unreadCount || 0) || 0;
+        session.unreadCount = fromMap > 0 ? fromMap : prev + 1;
 
         next.splice(idx, 1);
         next.unshift(session);

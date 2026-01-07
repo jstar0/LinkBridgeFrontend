@@ -100,7 +100,13 @@ Page({
   onShow() {
     // Check for active call every time page is shown
     const activeCall = api.getActiveCall();
-    this.setData({ activeCall: activeCall || null });
+    // Reset keyboardHeight on show to avoid "floating" input after navigating away and back.
+    this.setData({ activeCall: activeCall || null, keyboardHeight: 0 });
+    try {
+      wx.hideKeyboard();
+    } catch (e) {
+      // ignore
+    }
   },
 
   onUnload() {
@@ -138,8 +144,7 @@ Page({
   },
 
   handleKeyboardHeightChange(event) {
-    const height = event?.detail?.height || 0;
-    if (!height) return;
+    const height = Number(event?.detail?.height || 0) || 0;
     this.setData({ keyboardHeight: height });
     wx.nextTick(this.scrollToBottom);
   },
@@ -458,7 +463,12 @@ Page({
     }
 
     const url = `/pages/peer/index?userId=${encodeURIComponent(peerUserId)}`;
-    wx.navigateTo({ url });
+    try {
+      wx.hideKeyboard();
+    } catch (e) {
+      // ignore
+    }
+    this.setData({ keyboardHeight: 0 }, () => wx.navigateTo({ url }));
   },
 
   onClosePeerProfile() {
