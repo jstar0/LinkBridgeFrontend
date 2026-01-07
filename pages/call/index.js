@@ -102,6 +102,10 @@ Page({
     showReject: false,
     showCancel: false,
     showHangup: false,
+    minimized: false,
+    muted: false,
+    speakerOn: false,
+    controlsVisible: true,
   },
 
   wsHandler: null,
@@ -178,50 +182,83 @@ Page({
   },
 
   onTapBack() {
-    if (this._exiting) return;
-
-    const callId = this.data.callId;
     const status = this.data.status;
     const hasActiveCall = status && !['idle', 'ended', 'failed'].includes(status);
 
-    if (!callId || !hasActiveCall) {
+    if (!hasActiveCall) {
       wx.navigateBack();
       return;
     }
 
-    this._exiting = true;
-    showModal({
-      title: '结束通话？',
-      content: '返回将结束当前通话。',
-      confirmText: '结束并返回',
-      cancelText: '继续通话',
-    })
-      .then((res) => {
-        if (!res?.confirm) {
-          this._exiting = false;
-          return;
-        }
+    // Save call state globally and navigate back
+    api.setActiveCall({
+      callId: this.data.callId,
+      peerUserId: this.data.peerUserId,
+      peerDisplayName: this.data.peerDisplayName,
+      mediaType: this.data.mediaType,
+      status: this.data.status,
+      statusText: this.data.statusText,
+    });
 
-        // Decide which "end" action is appropriate for current state.
-        if (this.data.showHangup || status === 'accepted') {
-          this.onTapHangup();
-          return;
-        }
-        if (this.data.showCancel || status === 'outgoing' || status === 'ringing') {
-          this.onTapCancel();
-          return;
-        }
-        if (this.data.showReject || status === 'incoming') {
-          this.onTapReject();
-          return;
-        }
+    wx.navigateBack();
+  },
 
-        // Fallback: best-effort end.
-        this.onTapHangup();
-      })
-      .catch(() => {
-        this._exiting = false;
-      });
+  onRestoreFromFloating() {
+    this.setData({ minimized: false });
+  },
+
+  onToggleMute() {
+    this.setData({ muted: !this.data.muted });
+    // TODO: Implement actual mute logic
+  },
+
+  onToggleSpeaker() {
+    this.setData({ speakerOn: !this.data.speakerOn });
+    // TODO: Implement actual speaker toggle logic
+  },
+
+  onSwitchCamera() {
+    // TODO: Implement camera switch logic
+    wx.showToast({ title: '切换摄像头', icon: 'none' });
+  },
+
+  onShowMenu() {
+    // TODO: Implement menu logic
+    wx.showToast({ title: '菜单', icon: 'none' });
+  },
+
+  onTapScreen() {
+    if (this.data.mediaType !== 'video') return;
+
+    // Toggle controls visibility
+    const newVisible = !this.data.controlsVisible;
+    this.setData({ controlsVisible: newVisible });
+
+    // If showing controls, start timer to hide them
+    if (newVisible) {
+      this.startHideControlsTimer();
+    } else {
+      // If hiding, clear the timer
+      if (this.hideControlsTimer) {
+        clearTimeout(this.hideControlsTimer);
+        this.hideControlsTimer = null;
+      }
+    }
+  },
+
+  startHideControlsTimer() {
+    // Clear existing timer
+    if (this.hideControlsTimer) {
+      clearTimeout(this.hideControlsTimer);
+    }
+
+    // Set new timer to hide controls after 3 seconds
+    this.hideControlsTimer = setTimeout(() => {
+      if (this.data.mediaType === 'video') {
+        this.setData({ controlsVisible: false });
+      }
+      this.hideControlsTimer = null;
+    }, 3000);
   },
 
   setupWebSocket(callId) {
@@ -377,6 +414,8 @@ Page({
         // Start video capture if video call
         if (this.data.mediaType === 'video') {
           this.startVideoCapture();
+          // Start auto-hide timer for video call controls
+          this.startHideControlsTimer();
         }
       })
       .catch((err) => {
@@ -645,6 +684,7 @@ Page({
     if (!callId) return;
 
     this.setStatus('ended', '已拒绝');
+    api.clearActiveCall();
     api
       .rejectCall(callId)
       .catch(() => null)
@@ -656,6 +696,7 @@ Page({
     if (!callId) return;
 
     this.setStatus('ended', '已取消');
+    api.clearActiveCall();
     api
       .cancelCall(callId)
       .catch(() => null)
@@ -667,6 +708,7 @@ Page({
     if (!callId) return;
 
     this.setStatus('ended', '挂断中…');
+    api.clearActiveCall();
 
     Promise.resolve()
       .then(() => this.stopRealtimeAudio())

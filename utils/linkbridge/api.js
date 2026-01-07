@@ -362,6 +362,21 @@ function sendVideoFrame(callId, base64Data) {
   sendWebSocketJson({ type: 'video.frame', callId: cid, data });
 }
 
+// Global call state management
+let activeCall = null;
+
+function setActiveCall(callInfo) {
+  activeCall = callInfo;
+}
+
+function getActiveCall() {
+  return activeCall;
+}
+
+function clearActiveCall() {
+  activeCall = null;
+}
+
 module.exports = {
   getBaseUrl,
   getWsUrl,
@@ -407,4 +422,7 @@ module.exports = {
   sendWebSocketJson,
   sendAudioFrame,
   sendVideoFrame,
+  setActiveCall,
+  getActiveCall,
+  clearActiveCall,
 };

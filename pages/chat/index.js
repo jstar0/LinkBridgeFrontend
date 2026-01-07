@@ -31,6 +31,8 @@ Page({
     loading: false,
     myUserId: '',
     sending: false,
+    drawerVisible: false,
+    activeCall: null,
   },
 
   onLoad(options) {
@@ -91,6 +93,12 @@ Page({
     }
   },
 
+  onShow() {
+    // Check for active call every time page is shown
+    const activeCall = api.getActiveCall();
+    this.setData({ activeCall: activeCall || null });
+  },
+
   onUnload() {
     if (this.wsHandler) api.removeWebSocketHandler(this.wsHandler);
   },
@@ -148,17 +156,20 @@ Page({
   },
 
   onTapMore() {
-    wx.showActionSheet({
-      itemList: ['发送照片', '发送文件'],
-      success: (res) => {
-        if (res.tapIndex === 0) this.sendImage();
-        if (res.tapIndex === 1) this.sendFile();
-      },
-    });
+    this.setData({ drawerVisible: true });
+  },
+
+  onCloseDrawer() {
+    this.setData({ drawerVisible: false });
+  },
+
+  onDrawerVisibleChange(e) {
+    this.setData({ drawerVisible: !!e?.detail?.visible });
   },
 
   sendImage() {
     if (this.data.sending) return;
+    this.setData({ drawerVisible: false });
 
     if (typeof wx?.chooseMedia !== 'function' && typeof wx?.chooseImage !== 'function') {
       wx.showToast({ title: '当前环境不支持选图', icon: 'none' });
@@ -221,6 +232,7 @@ Page({
 
   sendFile() {
     if (this.data.sending) return;
+    this.setData({ drawerVisible: false });
 
     const chooseFileFromWechat = () =>
       new Promise((resolve, reject) => {
@@ -370,6 +382,7 @@ Page({
   },
 
   onTapVoiceCall() {
+    this.setData({ drawerVisible: false });
     const peerUserId = this.data.peerUserId || '';
     const peerName = this.data.name || '';
     if (!peerUserId) {
@@ -380,6 +393,22 @@ Page({
     const url =
       `/pages/call/index?peerUserId=${encodeURIComponent(peerUserId)}` +
       `&mediaType=voice` +
+      (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '');
+    wx.navigateTo({ url });
+  },
+
+  onTapVideoCall() {
+    this.setData({ drawerVisible: false });
+    const peerUserId = this.data.peerUserId || '';
+    const peerName = this.data.name || '';
+    if (!peerUserId) {
+      wx.showToast({ title: '缺少对方信息', icon: 'none' });
+      return;
+    }
+
+    const url =
+      `/pages/call/index?peerUserId=${encodeURIComponent(peerUserId)}` +
+      `&mediaType=video` +
       (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '');
     wx.navigateTo({ url });
   },
@@ -423,5 +452,17 @@ Page({
 
   scrollToBottom() {
     this.setData({ anchor: 'bottom' });
+  },
+
+  onRestoreCall() {
+    const activeCall = this.data.activeCall;
+    if (!activeCall) return;
+
+    const url =
+      `/pages/call/index?callId=${encodeURIComponent(activeCall.callId)}` +
+      `&peerUserId=${encodeURIComponent(activeCall.peerUserId)}` +
+      `&mediaType=${activeCall.mediaType}` +
+      (activeCall.peerDisplayName ? `&peerName=${encodeURIComponent(activeCall.peerDisplayName)}` : '');
+    wx.navigateTo({ url });
   },
 });

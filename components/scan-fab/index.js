@@ -133,7 +133,6 @@ Component({
 
       wx.scanCode({
         onlyFromCamera: true,
-        scanType: ['qrCode'],
         success: (res) => {
           const path = res?.path || '';
           if (!path) {

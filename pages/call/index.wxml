@@ -1,28 +1,85 @@
-<!-- Use built-in left arrow for visuals, but disable default navigateBack via delta=0.
-     Click handling is implemented via a fixed hot area to avoid navbar event binding issues in some environments. -->
-<t-navbar title="{{navbarTitle}}" left-arrow delta="{{0}}" />
-<view class="lb-call-back-hotarea" catchtap="onTapBack" />
+<!-- Navbar with back button -->
+<t-navbar wx:if="{{!minimized}}" title="{{navbarTitle}}" left-arrow delta="{{0}}" />
+<view wx:if="{{!minimized}}" class="lb-call-back-hotarea" catchtap="onTapBack" />
 
-<view class="page call">
-  <!-- Video call UI -->
-  <block wx:if="{{mediaType === 'video' && status === 'in_call'}}">
-    <!-- Remote video (full screen background) -->
-    <canvas type="2d" id="remoteVideo" class="video-remote"></canvas>
+<!-- Voice Call UI -->
+<view wx:if="{{!minimized && mediaType === 'voice'}}" class="voice-call">
+  <!-- Center: Avatar and info -->
+  <view class="call-info">
+    <image class="avatar-rect" src="/static/chat/avatar.png" mode="aspectFill" />
+    <view class="peer-name">{{peerDisplayName || '通话'}}</view>
+    <view class="call-status">{{statusText}}</view>
+  </view>
 
-    <!-- Local video (small preview) -->
-    <camera class="video-local" device-position="front" flash="off" binderror="onCameraError"></camera>
-  </block>
+  <!-- Bottom controls -->
+  <view class="bottom-controls">
+    <!-- Incoming call: Accept + Reject -->
+    <t-button wx:if="{{showAccept}}" class="call-btn" theme="primary" shape="circle" icon="call" bind:tap="onTapAccept" />
+    <t-button wx:if="{{showReject}}" class="call-btn call-btn-hangup" theme="danger" shape="circle" icon="call-off" bind:tap="onTapReject" />
 
-  <!-- Voice call / waiting UI -->
-  <block wx:else>
-    <view class="call__title">{{peerDisplayName || '通话'}}</view>
-    <view class="call__status">{{statusText}}</view>
-  </block>
+    <!-- Outgoing call: Cancel -->
+    <t-button wx:if="{{showCancel}}" class="call-btn call-btn-hangup" theme="danger" shape="circle" icon="call-off" bind:tap="onTapCancel" />
 
-  <view class="call__actions {{mediaType === 'video' && status === 'in_call' ? 'call__actions--video' : ''}}">
-    <t-button wx:if="{{showAccept}}" theme="primary" shape="round" content="接听" bind:tap="onTapAccept" />
-    <t-button wx:if="{{showReject}}" theme="danger" shape="round" content="拒绝" bind:tap="onTapReject" />
-    <t-button wx:if="{{showCancel}}" theme="default" variant="outline" shape="round" content="取消" bind:tap="onTapCancel" />
-    <t-button wx:if="{{showHangup}}" theme="danger" shape="round" content="挂断" bind:tap="onTapHangup" />
+    <!-- In call: Mute + Hangup + Speaker -->
+    <t-button wx:if="{{showHangup}}" class="call-btn" theme="default" shape="circle" icon="{{muted ? 'mic-off' : 'mic'}}" bind:tap="onToggleMute" />
+    <t-button wx:if="{{showHangup}}" class="call-btn call-btn-hangup" theme="danger" shape="circle" icon="call-off" bind:tap="onTapHangup" />
+    <t-button wx:if="{{showHangup}}" class="call-btn" theme="default" shape="circle" icon="{{speakerOn ? 'sound' : 'sound-off'}}" bind:tap="onToggleSpeaker" />
   </view>
 </view>
+
+<!-- Video Call UI -->
+<view wx:if="{{!minimized && mediaType === 'video'}}" class="video-call" catchtap="onTapScreen">
+  <!-- Remote video (full screen) -->
+  <canvas type="2d" id="remoteVideo" class="remote-video"></canvas>
+
+  <!-- Local preview (top right) -->
+  <camera class="local-preview" device-position="front" flash="off" binderror="onCameraError"></camera>
+
+  <!-- Status text (top left) -->
+  <view class="status-text">{{statusText}}</view>
+
+  <!-- Top controls (can hide) -->
+  <view wx:if="{{controlsVisible}}" class="top-controls">
+    <view class="control-btn" catchtap="onToggleMute">
+      <t-icon name="{{muted ? 'mic-off' : 'mic'}}" size="48rpx" color="#fff" />
+    </view>
+    <view class="control-btn" catchtap="onSwitchCamera">
+      <t-icon name="camera-rotate" size="48rpx" color="#fff" />
+    </view>
+  </view>
+
+  <!-- Bottom controls (can hide) -->
+  <view wx:if="{{controlsVisible}}" class="bottom-controls">
+    <view wx:if="{{showAccept}}" class="control-btn" catchtap="onTapAccept">
+      <t-icon name="video" size="56rpx" color="#fff" />
+    </view>
+    <view wx:if="{{showReject}}" class="control-btn hangup" catchtap="onTapReject">
+      <t-icon name="call-off" size="56rpx" color="#fff" />
+    </view>
+    <view wx:if="{{showCancel}}" class="control-btn hangup" catchtap="onTapCancel">
+      <t-icon name="call-off" size="56rpx" color="#fff" />
+    </view>
+    <view wx:if="{{showHangup}}" class="control-btn" catchtap="onShowMenu">
+      <t-icon name="menu" size="56rpx" color="#fff" />
+    </view>
+    <view wx:if="{{showHangup}}" class="control-btn" catchtap="onToggleMute">
+      <t-icon name="{{muted ? 'mic-off' : 'mic'}}" size="56rpx" color="#fff" />
+    </view>
+    <view wx:if="{{showHangup}}" class="control-btn" catchtap="onToggleSpeaker">
+      <t-icon name="{{speakerOn ? 'sound' : 'sound-off'}}" size="56rpx" color="#fff" />
+    </view>
+    <view wx:if="{{showHangup}}" class="control-btn hangup" catchtap="onTapHangup">
+      <t-icon name="call-off" size="56rpx" color="#fff" />
+    </view>
+  </view>
+</view>
+
+<!-- Floating window -->
+<movable-area wx:if="{{minimized}}" class="floating-area">
+  <movable-view class="floating-window" direction="all" inertia>
+    <view class="floating-content" catchtap="onRestoreFromFloating">
+      <t-icon name="{{mediaType === 'video' ? 'video' : 'call'}}" size="56rpx" color="#07c160" />
+      <view class="floating-status">{{statusText}}</view>
+    </view>
+  </movable-view>
+</movable-area>

@@ -123,3 +123,48 @@
     </view>
   </view>
 </t-popup>
+
+<t-popup visible="{{drawerVisible}}" placement="bottom" overlay bind:visible-change="onDrawerVisibleChange">
+  <view class="action-drawer">
+    <view class="action-drawer__header">
+      <view class="action-drawer__title">选择操作</view>
+      <t-icon name="close" size="48rpx" bind:tap="onCloseDrawer" />
+    </view>
+    <view class="action-drawer__content">
+      <view class="action-item" bind:tap="sendImage">
+        <view class="action-item__icon">
+          <t-icon name="image" size="56rpx" color="#576b95" />
+        </view>
+        <view class="action-item__text">图片</view>
+      </view>
+      <view class="action-item" bind:tap="sendFile">
+        <view class="action-item__icon">
+          <t-icon name="folder" size="56rpx" color="#576b95" />
+        </view>
+        <view class="action-item__text">文件</view>
+      </view>
+      <view class="action-item" bind:tap="onTapVoiceCall">
+        <view class="action-item__icon">
+          <t-icon name="call" size="56rpx" color="#576b95" />
+        </view>
+        <view class="action-item__text">语音通话</view>
+      </view>
+      <view class="action-item" bind:tap="onTapVideoCall">
+        <view class="action-item__icon">
+          <t-icon name="video" size="56rpx" color="#576b95" />
+        </view>
+        <view class="action-item__text">视频通话</view>
+      </view>
+    </view>
+  </view>
+</t-popup>
+
+<!-- Floating call window -->
+<movable-area wx:if="{{activeCall}}" class="floating-area">
+  <movable-view class="floating-window" direction="all" inertia>
+    <view class="floating-content" catchtap="onRestoreCall">
+      <t-icon name="{{activeCall.mediaType === 'video' ? 'video' : 'call'}}" size="56rpx" color="#07c160" />
+      <view class="floating-status">{{activeCall.statusText}}</view>
+    </view>
+  </movable-view>
+</movable-area>
