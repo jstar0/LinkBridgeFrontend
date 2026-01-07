@@ -2,20 +2,15 @@ export const checkConfig = (chatMode, agentConfig, modelConfig) => {
   const { botId } = agentConfig || {};
   const { modelProvider, quickResponseModel, deepReasoningModel } = modelConfig || {};
   // 检测不在微信环境，提示用户
-  const appBaseInfo = wx.getAppBaseInfo();
-  try {
-    const systemInfo = wx.getSystemInfoSync();
-    // console.log('systemInfo', systemInfo)
-    if (systemInfo.environment === "wxwork") {
-      return [false, "请前往微信客户端扫码打开小程序"];
-    }
-  } catch (e) {
-    // console.log('getSystemInfoSync 接口废弃')
-    // 使用 getAppBaseInfo 兜底
-    // console.log('appBaseInfo', appBaseInfo)
-    if (appBaseInfo.host.env === "SDK") {
-      return [false, "请前往微信客户端扫码打开小程序"];
-    }
+  const appBaseInfo = typeof wx?.getAppBaseInfo === 'function' ? wx.getAppBaseInfo() : { host: { env: '' }, SDKVersion: '0.0.0' };
+  const hostEnv = String(appBaseInfo?.host?.env || '').toLowerCase();
+  // DevTools / non-WeChat host: guide user to open in WeChat client.
+  if (hostEnv === 'sdk') {
+    return [false, '请前往微信客户端扫码打开小程序'];
+  }
+  // WeCom (企业微信) host.
+  if (hostEnv === 'wxwork' || hostEnv === 'wechatwork') {
+    return [false, '请前往微信客户端扫码打开小程序'];
   }
 
   // 检测AI能力，不存在提示用户

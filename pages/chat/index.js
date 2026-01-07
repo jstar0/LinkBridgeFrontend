@@ -15,26 +15,35 @@ function buildViewMessage(msg, myUserId) {
   };
 }
 
-function getSafeAreaInsetBottomPx() {
+function getWindowInfoCompat() {
   try {
-    const info = wx.getSystemInfoSync();
-    const screenH = Number(info?.screenHeight || 0) || 0;
-    const safeBottom = Number(info?.safeArea?.bottom || 0) || 0;
-    if (screenH > 0 && safeBottom > 0) return Math.max(0, screenH - safeBottom);
+    if (typeof wx?.getWindowInfo === 'function') return wx.getWindowInfo() || {};
   } catch (e) {
     // ignore
   }
+  // Fallback for older base libs only (avoid calling deprecated APIs when `getWindowInfo` exists).
+  if (typeof wx?.getWindowInfo !== 'function') {
+    try {
+      if (typeof wx?.getSystemInfoSync === 'function') return wx.getSystemInfoSync() || {};
+    } catch (e) {
+      // ignore
+    }
+  }
+  return {};
+}
+
+function getSafeAreaInsetBottomPx() {
+  const info = getWindowInfoCompat();
+  const screenH = Number(info?.screenHeight || 0) || 0;
+  const safeBottom = Number(info?.safeArea?.bottom || 0) || 0;
+  if (screenH > 0 && safeBottom > 0) return Math.max(0, screenH - safeBottom);
   return 0;
 }
 
 function rpxToPx(rpx) {
-  try {
-    const info = wx.getSystemInfoSync();
-    const w = Number(info?.windowWidth || 0) || 0;
-    if (w > 0) return (Number(rpx || 0) || 0) * (w / 750);
-  } catch (e) {
-    // ignore
-  }
+  const info = getWindowInfoCompat();
+  const w = Number(info?.windowWidth || 0) || 0;
+  if (w > 0) return (Number(rpx || 0) || 0) * (w / 750);
   return 0;
 }
 

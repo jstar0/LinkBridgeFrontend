@@ -163,7 +163,8 @@ Page({
             displayName: 'AI 助手',
             avatarUrl: '',
           },
-          avatar: '🤖',
+          // Must be a valid local/remote image path; emoji/text will be treated as a file path and error in DevTools.
+          avatar: '/static/chat/avatar.png',
           desc: '智能助手为您服务',
           unreadCount: 0,
           isAI: true,
