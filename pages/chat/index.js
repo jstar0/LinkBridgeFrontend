@@ -26,7 +26,7 @@ Page({
     peerProfile: { id: '', username: '', displayName: '', avatarUrl: '/static/chat/avatar.png' },
     messages: [],
     input: '',
-    anchor: '',
+    scrollTop: 0,
     keyboardHeight: 0,
     loading: false,
     myUserId: '',
@@ -145,8 +145,15 @@ Page({
 
   handleKeyboardHeightChange(event) {
     const height = Number(event?.detail?.height || 0) || 0;
-    this.setData({ keyboardHeight: height });
-    wx.nextTick(this.scrollToBottom);
+    this.setData({ keyboardHeight: height }, () => {
+      // Always keep latest messages visible when keyboard pops (WeChat/QQ-like behavior).
+      this.scrollToBottom();
+    });
+  },
+
+  handleFocus() {
+    // Each time keyboard is about to pop, force-scroll to bottom.
+    this.scrollToBottom();
   },
 
   handleBlur() {
@@ -480,7 +487,10 @@ Page({
   },
 
   scrollToBottom() {
-    this.setData({ anchor: 'bottom' });
+    // `scroll-into-view` won't re-trigger if the value doesn't change.
+    // Use `scrollTop` with a monotonically increasing value to force-scroll every time.
+    const next = Number(this.data.scrollTop || 0) + 100000;
+    this.setData({ scrollTop: next });
   },
 
   onRestoreCall() {

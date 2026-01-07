@@ -7,7 +7,7 @@
 </t-navbar>
 
 <view class="chat-container">
-  <scroll-view class="content" scroll-y scroll-into-view="{{ anchor }}">
+  <scroll-view class="content" scroll-y scroll-top="{{ scrollTop }}">
     <view class="messages">
       <block wx:for="{{ messages }}" wx:key="index">
         <!-- Show reactivation divider if this is the first message after reactivation -->
@@ -99,6 +99,7 @@
       adjust-position="{{ false }}"
       hold-keyboard
       confirm-hold
+      bindfocus="handleFocus"
       bindkeyboardheightchange="handleKeyboardHeightChange"
       bindblur="handleBlur"
       bindinput="handleInput"
