@@ -27,7 +27,10 @@ Page({
     messages: [],
     input: '',
     scrollTop: 0,
+    scrollNonce: 0,
     keyboardHeight: 0,
+    bottomBarHeight: 0,
+    bottomSpacer: 0,
     loading: false,
     myUserId: '',
     sending: false,
@@ -81,7 +84,7 @@ Page({
       const myId = this.data.myUserId || api.getUser()?.id || '';
       const vm = buildViewMessage(msg, myId);
       this.setData({ messages: [...this.data.messages, vm] });
-      wx.nextTick(this.scrollToBottom);
+      wx.nextTick(() => this.scrollToBottom());
     };
     api.addWebSocketHandler(this.wsHandler);
 
@@ -101,12 +104,35 @@ Page({
     // Check for active call every time page is shown
     const activeCall = api.getActiveCall();
     // Reset keyboardHeight on show to avoid "floating" input after navigating away and back.
-    this.setData({ activeCall: activeCall || null, keyboardHeight: 0 });
+    this.setData({
+      activeCall: activeCall || null,
+      keyboardHeight: 0,
+      bottomSpacer: Number(this.data.bottomBarHeight || 0) || 0,
+    });
     try {
       wx.hideKeyboard();
     } catch (e) {
       // ignore
     }
+  },
+
+  onReady() {
+    // Measure the fixed bottom bar height so the scroll-view can reserve space.
+    wx.nextTick(() => {
+      const query = wx.createSelectorQuery().in(this);
+      query.select('.bottom').boundingClientRect();
+      query.exec((res) => {
+        const h = Number(res?.[0]?.height || 0) || 0;
+        if (h <= 0) return;
+        this.setData(
+          {
+            bottomBarHeight: h,
+            bottomSpacer: h + (Number(this.data.keyboardHeight || 0) || 0),
+          },
+          () => this.scrollToBottom()
+        );
+      });
+    });
   },
 
   onUnload() {
@@ -135,7 +161,7 @@ Page({
           loading: false,
           reactivatedAt
         });
-        wx.nextTick(this.scrollToBottom);
+        wx.nextTick(() => this.scrollToBottom());
       })
       .catch(() => {
         this.setData({ loading: false });
@@ -145,19 +171,23 @@ Page({
 
   handleKeyboardHeightChange(event) {
     const height = Number(event?.detail?.height || 0) || 0;
-    this.setData({ keyboardHeight: height }, () => {
+    const base = Number(this.data.bottomBarHeight || 0) || 0;
+    this.setData({ keyboardHeight: height, bottomSpacer: base + height }, () => {
       // Always keep latest messages visible when keyboard pops (WeChat/QQ-like behavior).
       this.scrollToBottom();
+      setTimeout(() => this.scrollToBottom(), 120);
     });
   },
 
   handleFocus() {
     // Each time keyboard is about to pop, force-scroll to bottom.
     this.scrollToBottom();
+    setTimeout(() => this.scrollToBottom(), 60);
   },
 
   handleBlur() {
-    this.setData({ keyboardHeight: 0 });
+    const base = Number(this.data.bottomBarHeight || 0) || 0;
+    this.setData({ keyboardHeight: 0, bottomSpacer: base }, () => this.scrollToBottom());
   },
 
   handleInput(event) {
@@ -178,7 +208,7 @@ Page({
         const id = vm?.messageId || '';
         if (id && this.data.messages.some((m) => m.messageId === id)) return;
         this.setData({ messages: [...this.data.messages, vm] });
-        wx.nextTick(this.scrollToBottom);
+        wx.nextTick(() => this.scrollToBottom());
       })
       .catch(() => {
         wx.showToast({ title: '发送失败', icon: 'none' });
@@ -251,7 +281,7 @@ Page({
         const id = vm?.messageId || '';
         if (id && this.data.messages.some((m) => m.messageId === id)) return;
         this.setData({ messages: [...this.data.messages, vm], sending: false });
-        wx.nextTick(this.scrollToBottom);
+        wx.nextTick(() => this.scrollToBottom());
       })
       .catch(() => {
         wx.hideLoading();
@@ -346,7 +376,7 @@ Page({
             const id = vm?.messageId || '';
             if (id && this.data.messages.some((m) => m.messageId === id)) return;
             this.setData({ messages: [...this.data.messages, vm], sending: false });
-            wx.nextTick(this.scrollToBottom);
+            wx.nextTick(() => this.scrollToBottom());
           })
           .catch((err) => {
             wx.hideLoading();
@@ -475,7 +505,8 @@ Page({
     } catch (e) {
       // ignore
     }
-    this.setData({ keyboardHeight: 0 }, () => wx.navigateTo({ url }));
+    const base = Number(this.data.bottomBarHeight || 0) || 0;
+    this.setData({ keyboardHeight: 0, bottomSpacer: base }, () => wx.navigateTo({ url }));
   },
 
   onClosePeerProfile() {
@@ -487,10 +518,19 @@ Page({
   },
 
   scrollToBottom() {
-    // `scroll-into-view` won't re-trigger if the value doesn't change.
-    // Use `scrollTop` with a monotonically increasing value to force-scroll every time.
-    const next = Number(this.data.scrollTop || 0) + 100000;
-    this.setData({ scrollTop: next });
+    wx.nextTick(() => {
+      const query = wx.createSelectorQuery().in(this);
+      query.select('.messages').boundingClientRect();
+      query.select('.content').boundingClientRect();
+      query.exec((res) => {
+        const messagesH = Number(res?.[0]?.height || 0) || 0;
+        const contentH = Number(res?.[1]?.height || 0) || 0;
+        const target = Math.max(0, messagesH - contentH);
+        const nonce = (Number(this.data.scrollNonce || 0) || 0) + 1;
+        // Force update even if target is the same as last-set scrollTop.
+        this.setData({ scrollNonce: nonce, scrollTop: target + (nonce % 2) });
+      });
+    });
   },
 
   onRestoreCall() {

@@ -77,11 +77,12 @@
         </view>
       </block>
       <view id="bottom" />
+      <view class="lb-bottom-spacer" style="height: {{ bottomSpacer }}px;" />
     </view>
   </scroll-view>
 </view>
 
-<view class="block" style="margin-bottom: {{ keyboardHeight }}px" />
+
 <view wx:if="{{archived}}" class="archived-notice">
   ⚠️ 此会话已归档，无法发送消息
 </view>
