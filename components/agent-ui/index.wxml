@@ -63,7 +63,7 @@
           {{refreshText}}
         </view>
         <view wx:if="{{chatMode === 'model'}}" class="nav">
-          <image src="{{bot.avatar||modelConfig.logo}}" mode="aspectFill" class="avatar" />
+          <image src="{{ (bot.avatar || modelConfig.logo || '/static/chat/avatar.png') }}" mode="aspectFill" class="avatar" />
           <view style="line-height: 47px; font-size: 20px; font-weight: 500;">{{chatMode==='bot'?bot.name:modelConfig.modelProvider}}</view>
           <view style="line-height: 26px;padding: 0px 16px; font-size: 32rpx;">{{chatMode==='bot'?"":modelConfig.welcomeMsg}}</view>
         </view>
@@ -71,7 +71,11 @@
           <!-- 系统聊天 -->
           <view class="system" style="padding-left: {{showBotAvatar?80:0}}rpx;" wx:if="{{item.role==='assistant'}}">
             <view class="avatar-left" wx:if="{{showBotAvatar}}">
-              <image src="{{chatMode==='bot'?bot.avatar:modelConfig.logo}}" mode="aspectFill" style="width: 56rpx;height: 56rpx; border-radius: 28rpx;" />
+              <image
+                src="{{ (chatMode==='bot' ? (bot.avatar || '/static/chat/avatar.png') : (modelConfig.logo || '/static/chat/avatar.png')) }}"
+                mode="aspectFill"
+                style="width: 56rpx;height: 56rpx; border-radius: 28rpx;"
+              />
             </view>
             <view>
               <!-- 最后一条消息，并且是发送状态显示发送中 -->
@@ -274,5 +278,13 @@
       </view>
     </view>
   </view>
-  <feedback input="{{input}}" aiAnswer="{{aiAnswer}}" isShowFeedback="{{isShowFeedback}}" bind:close="closefeedback" feedbackRecordId="{{feedbackRecordId}}" feedbackType="{{feedbackType}}" botId="{{bot.botId}}"></feedback>
+  <feedback
+    input="{{input || ''}}"
+    aiAnswer="{{aiAnswer || ''}}"
+    isShowFeedback="{{isShowFeedback}}"
+    bind:close="closefeedback"
+    feedbackRecordId="{{feedbackRecordId}}"
+    feedbackType="{{feedbackType}}"
+    botId="{{bot.botId || ''}}"
+  ></feedback>
 </view>
