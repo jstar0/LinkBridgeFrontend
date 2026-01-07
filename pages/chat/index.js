@@ -15,6 +15,36 @@ function buildViewMessage(msg, myUserId) {
   };
 }
 
+function getSafeAreaInsetBottomPx() {
+  try {
+    const info = wx.getSystemInfoSync();
+    const screenH = Number(info?.screenHeight || 0) || 0;
+    const safeBottom = Number(info?.safeArea?.bottom || 0) || 0;
+    if (screenH > 0 && safeBottom > 0) return Math.max(0, screenH - safeBottom);
+  } catch (e) {
+    // ignore
+  }
+  return 0;
+}
+
+function rpxToPx(rpx) {
+  try {
+    const info = wx.getSystemInfoSync();
+    const w = Number(info?.windowWidth || 0) || 0;
+    if (w > 0) return (Number(rpx || 0) || 0) * (w / 750);
+  } catch (e) {
+    // ignore
+  }
+  return 0;
+}
+
+function getBottomBarBaseHeightPx() {
+  // Match the layout in pages/chat/index.less:
+  // bottom padding: 24rpx + safe-area + 24rpx, input height 80rpx (approx), plus borders/gaps.
+  // Keep it simple and slightly generous (129rpx) like the previous `.block` height.
+  return Math.round(rpxToPx(129) + getSafeAreaInsetBottomPx());
+}
+
 Page({
   data: {
     myAvatar: '/static/chat/avatar.png',
@@ -64,6 +94,8 @@ Page({
       name: peerName || '会话',
       myUserId: cachedMe?.id || '',
       archived,
+      bottomBarHeight: getBottomBarBaseHeightPx(),
+      bottomSpacer: getBottomBarBaseHeightPx(),
     });
 
     api.connectWebSocket();
@@ -107,13 +139,19 @@ Page({
     this.setData({
       activeCall: activeCall || null,
       keyboardHeight: 0,
-      bottomSpacer: Number(this.data.bottomBarHeight || 0) || 0,
+      bottomSpacer: Number(this.data.bottomBarHeight || 0) || getBottomBarBaseHeightPx(),
     });
     try {
       wx.hideKeyboard();
     } catch (e) {
       // ignore
     }
+
+    // Ensure the first view is already at the latest message (state, no animation).
+    // Use two delayed attempts to cover initial render/layout settling on real devices.
+    this.scrollToBottom();
+    setTimeout(() => this.scrollToBottom(), 80);
+    setTimeout(() => this.scrollToBottom(), 220);
   },
 
   onReady() {
@@ -123,11 +161,12 @@ Page({
       query.select('.bottom').boundingClientRect();
       query.exec((res) => {
         const h = Number(res?.[0]?.height || 0) || 0;
-        if (h <= 0) return;
+        const fallback = getBottomBarBaseHeightPx();
+        const nextH = h > 0 ? h : fallback;
         this.setData(
           {
-            bottomBarHeight: h,
-            bottomSpacer: h + (Number(this.data.keyboardHeight || 0) || 0),
+            bottomBarHeight: nextH,
+            bottomSpacer: nextH + (Number(this.data.keyboardHeight || 0) || 0),
           },
           () => this.scrollToBottom()
         );
@@ -162,6 +201,8 @@ Page({
           reactivatedAt
         });
         wx.nextTick(() => this.scrollToBottom());
+        setTimeout(() => this.scrollToBottom(), 80);
+        setTimeout(() => this.scrollToBottom(), 220);
       })
       .catch(() => {
         this.setData({ loading: false });
@@ -518,19 +559,10 @@ Page({
   },
 
   scrollToBottom() {
-    wx.nextTick(() => {
-      const query = wx.createSelectorQuery().in(this);
-      query.select('.messages').boundingClientRect();
-      query.select('.content').boundingClientRect();
-      query.exec((res) => {
-        const messagesH = Number(res?.[0]?.height || 0) || 0;
-        const contentH = Number(res?.[1]?.height || 0) || 0;
-        const target = Math.max(0, messagesH - contentH);
-        const nonce = (Number(this.data.scrollNonce || 0) || 0) + 1;
-        // Force update even if target is the same as last-set scrollTop.
-        this.setData({ scrollNonce: nonce, scrollTop: target + (nonce % 2) });
-      });
-    });
+    const nonce = (Number(this.data.scrollNonce || 0) || 0) + 1;
+    // Use an oversized scrollTop to clamp to the bottom, and toggle by 1px to force updates.
+    const base = 10_000_000;
+    this.setData({ scrollNonce: nonce, scrollTop: base + (nonce % 2) });
   },
 
   onRestoreCall() {

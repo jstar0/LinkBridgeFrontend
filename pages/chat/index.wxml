@@ -7,7 +7,7 @@
 </t-navbar>
 
 <view class="chat-container">
-  <scroll-view class="content" scroll-y scroll-top="{{ scrollTop }}">
+  <scroll-view class="content" scroll-y scroll-with-animation="{{ false }}" scroll-top="{{ scrollTop }}">
     <view class="messages">
       <block wx:for="{{ messages }}" wx:key="index">
         <!-- Show reactivation divider if this is the first message after reactivation -->
