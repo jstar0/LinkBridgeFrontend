@@ -150,7 +150,21 @@ Page({
           avatar: (s && s.peer && s.peer.avatarUrl) || '/static/chat/avatar.png',
           desc: s && s.lastMessageText ? s.lastMessageText : ' ',
         }));
-        this.setData({ sessions: decorated, loading: false });
+
+        // Add AI assistant at the top
+        const aiSession = {
+          id: 'ai-assistant',
+          peer: {
+            displayName: 'AI 助手',
+            avatarUrl: '',
+          },
+          avatar: '🤖',
+          desc: '智能助手为您服务',
+          unreadCount: 0,
+          isAI: true,
+        };
+
+        this.setData({ sessions: [aiSession, ...decorated], loading: false });
       })
       .catch(() => {
         this.setData({ loading: false });
@@ -191,6 +205,12 @@ Page({
   toChat(event) {
     const session = event?.currentTarget?.dataset?.session;
     if (!session?.id) return;
+
+    // Handle AI chat separately
+    if (session.isAI) {
+      wx.navigateTo({ url: '/pages/ai-chat/index' });
+      return;
+    }
 
     // Reset unread count locally when opening.
     const sessions = this.data.sessions.map((s) => (s.id === session.id ? { ...s, unreadCount: 0 } : s));

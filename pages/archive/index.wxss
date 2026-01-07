@@ -1,0 +1,14 @@
+.archive-user {
+  filter: grayscale(30%);
+  opacity: 0.9;
+}
+
+.avatar {
+  width: 96rpx;
+  height: 96rpx;
+}
+
+.archive-time {
+  font-size: 24rpx;
+  color: #999;
+}

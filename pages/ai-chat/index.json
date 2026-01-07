@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "AI 助手",
+  "usingComponents": {
+    "agent-ui": "/components/agent-ui/index"
+  },
+  "enablePullDownRefresh": false
+}

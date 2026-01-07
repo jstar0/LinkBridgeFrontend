@@ -1,0 +1,18 @@
+<t-indexes list="{{indexList}}" bind:select="onIndexSelect">
+  <view wx:for="{{users}}" wx:key="id" class="archive-user">
+    <t-cell
+      t-class-image="avatar"
+      image="{{item.avatar}}"
+      title="{{item.displayName}}"
+      description="{{item.role}}"
+      hover
+      bind:click="onUserClick"
+      bind:longpress="onUserLongPress"
+      data-user="{{item}}"
+    >
+      <view slot="right-icon" class="archive-time">
+        {{item.lastArchiveTime}}
+      </view>
+    </t-cell>
+  </view>
+</t-indexes>

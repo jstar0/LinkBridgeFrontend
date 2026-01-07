@@ -1,7 +1,7 @@
 <wxs src="./index.wxs" module="utils" />
 
-<t-navbar class="nav-bar" title="{{ name }}" left-arrow>
-  <view slot="right" class="chat-nav__right">
+<t-navbar class="nav-bar" title="{{ archived ? name + ' [已归档]' : name }}" left-arrow>
+  <view wx:if="{{!archived}}" slot="right" class="chat-nav__right">
     <t-icon name="call" size="48rpx" color="#000000e6" bind:tap="onTapVoiceCall" />
   </view>
 </t-navbar>
@@ -10,6 +10,13 @@
   <scroll-view class="content" scroll-y scroll-into-view="{{ anchor }}">
     <view class="messages">
       <block wx:for="{{ messages }}" wx:key="index">
+        <!-- Show reactivation divider if this is the first message after reactivation -->
+        <view wx:if="{{ reactivatedAt && item.time >= reactivatedAt && (index === 0 || messages[index - 1].time < reactivatedAt) }}" class="reactivation-divider">
+          <view class="divider-line"></view>
+          <view class="divider-text">会话已重新激活 {{ utils.formatTime(reactivatedAt) }}</view>
+          <view class="divider-line"></view>
+        </view>
+
         <view wx:if="{{ index === 0 || item.time - messages[index - 1].time > 120000 }}" class="time" >
           {{ utils.formatTime(item.time) }}
         </view>
@@ -75,7 +82,10 @@
 </view>
 
 <view class="block" style="margin-bottom: {{ keyboardHeight }}px" />
-<view class="bottom" style="margin-bottom: {{ keyboardHeight }}px">
+<view wx:if="{{archived}}" class="archived-notice">
+  ⚠️ 此会话已归档，无法发送消息
+</view>
+<view wx:else class="bottom" style="margin-bottom: {{ keyboardHeight }}px">
   <view class="more" bind:tap="onTapMore">
     <t-icon name="add" size="44rpx" color="#00000099" />
   </view>

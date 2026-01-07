@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "归档会话",
+  "usingComponents": {
+    "t-indexes": "tdesign-miniprogram/indexes/indexes",
+    "t-cell": "tdesign-miniprogram/cell/cell",
+    "t-avatar": "tdesign-miniprogram/avatar/avatar"
+  }
+}

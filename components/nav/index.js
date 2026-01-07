@@ -22,6 +22,11 @@ Component({
         url: 'pages/my/index',
         isSidebar: true,
       },
+      {
+        title: '归档',
+        url: 'pages/archive/index',
+        isSidebar: false,
+      },
     ],
     statusHeight: 0,
   },

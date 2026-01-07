@@ -47,10 +47,24 @@ Page({
       .consumeSessionInvite(code)
       .then((res) => {
         const session = res?.session;
+        const needsReactivation = res?.needsReactivation;
+
         if (!session?.id) {
           this.setData({ loading: false, errorMessage: '建立会话失败' });
           return;
         }
+
+        // If session is archived, reactivate it
+        if (needsReactivation) {
+          return api.reactivateSession(session.id).then((reactivatedSession) => {
+            return reactivatedSession || session;
+          });
+        }
+
+        return session;
+      })
+      .then((session) => {
+        if (!session?.id) return;
 
         const peerName = session?.peer?.displayName || '';
         const peerUserId = session?.peer?.id || '';

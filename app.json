@@ -28,6 +28,16 @@
       "root": "pages/linkbridge/add-friend",
       "name": "linkbridge-add-friend",
       "pages": ["add-friend"]
+    },
+    {
+      "root": "pages/archive",
+      "name": "archive",
+      "pages": ["index"]
+    },
+    {
+      "root": "pages/ai-chat",
+      "name": "ai-chat",
+      "pages": ["index"]
     }
   ],
   "window": {

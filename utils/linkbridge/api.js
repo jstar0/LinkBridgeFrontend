@@ -145,6 +145,14 @@ function archiveSession(sessionId) {
   return request('POST', `/v1/sessions/${encodeURIComponent(sessionId)}/archive`).then((res) => res.session);
 }
 
+function reactivateSession(sessionId) {
+  return request('POST', `/v1/sessions/${encodeURIComponent(sessionId)}/reactivate`).then((res) => res.session);
+}
+
+function hideSession(sessionId) {
+  return request('POST', `/v1/sessions/${encodeURIComponent(sessionId)}/hide`).then((res) => res);
+}
+
 function listMessages(sessionId, beforeId) {
   let path = `/v1/sessions/${encodeURIComponent(sessionId)}/messages`;
   if (beforeId) {
@@ -396,6 +404,8 @@ module.exports = {
   listSessions,
   createSession,
   archiveSession,
+  reactivateSession,
+  hideSession,
   listMessages,
   sendTextMessage,
   uploadFile,

@@ -33,12 +33,15 @@ Page({
     sending: false,
     drawerVisible: false,
     activeCall: null,
+    archived: false,
+    reactivatedAt: null,
   },
 
   onLoad(options) {
     const sessionId = (options?.sessionId || '').trim();
     const peerName = options?.peerName ? decodeURIComponent(options.peerName) : '';
     const peerUserId = options?.peerUserId ? decodeURIComponent(options.peerUserId) : '';
+    const archived = options?.archived === 'true';
 
     if (!sessionId) {
       wx.showToast({ title: '缺少会话ID', icon: 'none' });
@@ -57,6 +60,7 @@ Page({
       peerUserId,
       name: peerName || '会话',
       myUserId: cachedMe?.id || '',
+      archived,
     });
 
     api.connectWebSocket();
@@ -105,12 +109,26 @@ Page({
 
   loadMessages() {
     this.setData({ loading: true });
-    api
-      .listMessages(this.data.sessionId)
-      .then((res) => {
+
+    // Load both messages and session info
+    Promise.all([
+      api.listMessages(this.data.sessionId),
+      api.listSessions('active').then(sessions =>
+        sessions.find(s => s.id === this.data.sessionId)
+      )
+    ])
+      .then(([messagesRes, session]) => {
         const myId = this.data.myUserId || api.getUser()?.id || '';
-        const vms = (res?.messages || []).map((m) => buildViewMessage(m, myId));
-        this.setData({ messages: vms, loading: false });
+        const vms = (messagesRes?.messages || []).map((m) => buildViewMessage(m, myId));
+
+        // Check if session was reactivated
+        const reactivatedAt = session?.reactivatedAt ? new Date(session.reactivatedAt).getTime() : null;
+
+        this.setData({
+          messages: vms,
+          loading: false,
+          reactivatedAt
+        });
         wx.nextTick(this.scrollToBottom);
       })
       .catch(() => {
