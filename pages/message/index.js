@@ -156,6 +156,31 @@ Page({
           desc: s && s.lastMessageText ? s.lastMessageText : ' ',
         }));
 
+        // Prune stale unread entries for sessions that no longer exist.
+        // Otherwise TabBar dot may stay on even when the visible session list has no unread.
+        try {
+          const valid = new Set((decorated || []).map((s) => s?.id).filter(Boolean));
+          const map = app?.globalData?.unreadBySession || {};
+          let changed = false;
+          Object.keys(map || {}).forEach((sid) => {
+            if (!valid.has(sid)) {
+              delete map[sid];
+              changed = true;
+            }
+          });
+          if (changed) {
+            app.globalData.unreadBySession = map;
+            try {
+              wx.setStorageSync('lb_unread_by_session_v1', JSON.stringify(map));
+            } catch (e) {
+              // ignore
+            }
+            if (typeof app.recalcUnreadNum === 'function') app.recalcUnreadNum();
+          }
+        } catch (e) {
+          // ignore
+        }
+
         // Add AI assistant at the top
         const aiSession = {
           id: 'ai-assistant',

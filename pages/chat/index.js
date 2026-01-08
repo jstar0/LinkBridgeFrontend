@@ -1,4 +1,5 @@
 const api = require('../../utils/linkbridge/api');
+const app = getApp();
 
 function buildViewMessage(msg, myUserId) {
   const senderId = msg?.senderId || '';
@@ -106,6 +107,9 @@ Page({
       bottomBarHeight: getBottomBarBaseHeightPx(),
       bottomSpacer: getBottomBarBaseHeightPx(),
     });
+
+    // Clear unread for this session when entering chat, even if user didn't come from the session list.
+    if (typeof app?.setSessionUnread === 'function') app.setSessionUnread(sessionId, 0);
 
     api.connectWebSocket();
     this.loadMessages();
