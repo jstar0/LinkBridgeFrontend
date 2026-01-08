@@ -44,6 +44,20 @@ export function randomSelectInitquestion(question = [], num = 3) {
 
 export const getCloudInstance = (function () {
   let cloudInstance = null;
+  let cloudInited = false;
+
+  function ensureCloudInit() {
+    if (cloudInited) return;
+    if (!wx?.cloud || typeof wx.cloud.init !== "function") return;
+    try {
+      // DevTools requires explicit init before using `wx.cloud.extend.*` APIs.
+      // Env can be selected in DevTools; keep it default here.
+      wx.cloud.init({ traceUser: true });
+      cloudInited = true;
+    } catch (e) {
+      // ignore; downstream calls will surface a clearer error if init truly failed.
+    }
+  }
   return async function (envShareConfig) {
     if (cloudInstance) {
       return cloudInstance;
@@ -62,6 +76,7 @@ export const getCloudInstance = (function () {
       cloudInstance = instance;
       return cloudInstance;
     } else {
+      ensureCloudInit();
       cloudInstance = wx.cloud;
       return cloudInstance;
     }
