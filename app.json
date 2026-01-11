@@ -1,5 +1,5 @@
 {
-  "pages": ["pages/message/index", "pages/my/index", "pages/my/info-edit/index"],
+  "pages": ["pages/message/index", "pages/my/index", "pages/my/info-edit/index", "pages/my/profile-publish/index"],
   "usingComponents": {
     "t-toast": "tdesign-miniprogram/toast/toast"
   },

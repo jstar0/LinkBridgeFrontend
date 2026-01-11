@@ -1,0 +1,132 @@
+<view class="profile-publish">
+  <nav title-text="个人主页" />
+
+  <view class="header">
+    <t-avatar image="{{me.avatarUrl || '/static/avatar1.png'}}" size="large" />
+    <view class="header__meta">
+      <view class="header__name">{{ me.displayName || '未登录' }}</view>
+      <view class="header__sub">{{ me.username ? '@' + me.username : (isLoggedIn ? '' : '请先登录后再发布') }}</view>
+    </view>
+    <t-button
+      wx:if="{{isLoggedIn}}"
+      size="small"
+      variant="outline"
+      theme="default"
+      bind:tap="onOpenEditCard"
+    >
+      编辑名片
+    </t-button>
+    <t-button wx:else size="small" theme="primary" bind:tap="onGoLogin">去登录</t-button>
+  </view>
+
+  <view class="card">
+    <view class="card__title">我的名片</view>
+    <view class="card__content">
+      <view class="row">
+        <view class="row__label">简介</view>
+        <view class="row__value">{{ profile.bio || '还没有填写简介' }}</view>
+      </view>
+      <view class="row">
+        <view class="row__label">标签</view>
+        <view class="row__value">
+          <view wx:if="{{profile.tags && profile.tags.length}}" class="tags">
+            <t-tag wx:for="{{profile.tags}}" wx:key="index" class="tag" variant="light">{{item}}</t-tag>
+          </view>
+          <view wx:else class="muted">还没有标签</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="composer">
+    <view class="composer__title">发布动态</view>
+    <textarea
+      class="composer__textarea"
+      placeholder="写点什么…"
+      value="{{draft.text}}"
+      maxlength="500"
+      bindinput="onDraftTextInput"
+      disabled="{{!isLoggedIn}}"
+    />
+
+    <view wx:if="{{draft.images && draft.images.length}}" class="images">
+      <view wx:for="{{draft.images}}" wx:key="index" class="images__item">
+        <image class="images__img" mode="aspectFill" src="{{item}}" bind:tap="onPreviewDraftImage" data-index="{{index}}" />
+        <view class="images__remove" bind:tap="onRemoveDraftImage" data-index="{{index}}">
+          <t-icon name="close-circle-filled" size="36rpx" color="#fa5151" />
+        </view>
+      </view>
+    </view>
+
+    <view class="composer__actions">
+      <t-button theme="default" variant="outline" bind:tap="onPickImages" disabled="{{!isLoggedIn}}">选图</t-button>
+      <t-button theme="primary" bind:tap="onPublish" disabled="{{!isLoggedIn}}">发布</t-button>
+    </view>
+  </view>
+
+  <view class="feed">
+    <view class="feed__title">我的动态</view>
+    <view wx:if="{{!posts.length}}" class="empty">暂时还没有动态</view>
+    <view wx:for="{{posts}}" wx:key="id" class="post">
+      <view class="post__head">
+        <t-avatar image="{{me.avatarUrl || '/static/avatar1.png'}}" size="small" />
+        <view class="post__meta">
+          <view class="post__name">{{ me.displayName || '我' }}</view>
+          <view class="post__time">{{ item.createdAtText }}</view>
+        </view>
+      </view>
+      <view wx:if="{{item.text}}" class="post__text">{{ item.text }}</view>
+      <view wx:if="{{item.images && item.images.length}}" class="post__images">
+        <image
+          wx:for="{{item.images}}"
+          wx:key="index"
+          class="post__img"
+          mode="aspectFill"
+          src="{{item}}"
+          bind:tap="onPreviewPostImage"
+          data-postid="{{item.id}}"
+          data-index="{{index}}"
+        />
+      </view>
+    </view>
+  </view>
+
+  <t-popup visible="{{editVisible}}" placement="bottom" overlay bind:visible-change="onEditVisibleChange">
+    <view class="edit">
+      <view class="edit__header">
+        <view class="edit__title">编辑名片</view>
+        <t-icon name="close" size="48rpx" bind:tap="onCloseEditCard" />
+      </view>
+
+      <view class="edit__body">
+        <view class="edit__field">
+          <view class="edit__label">简介</view>
+          <textarea
+            class="edit__textarea"
+            placeholder="一句话介绍你自己"
+            value="{{editDraft.bio}}"
+            maxlength="200"
+            bindinput="onEditBioInput"
+          />
+        </view>
+
+        <view class="edit__field">
+          <view class="edit__label">标签（用空格分隔）</view>
+          <input
+            class="edit__input"
+            placeholder="例如：程序员 旅行 摄影"
+            value="{{editDraft.tagsText}}"
+            maxlength="80"
+            bindinput="onEditTagsInput"
+          />
+        </view>
+      </view>
+
+      <view class="edit__actions">
+        <t-button theme="default" variant="outline" block bind:tap="onCloseEditCard">取消</t-button>
+        <t-button theme="primary" block style="margin-top: 16rpx;" bind:tap="onSaveCard">保存</t-button>
+      </view>
+    </view>
+  </t-popup>
+</view>
+
