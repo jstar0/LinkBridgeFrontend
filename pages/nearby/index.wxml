@@ -35,8 +35,10 @@
         bindmarkertap="onMarkerTap"
         bindregionchange="onRegionChange"
       />
+    </view>
 
-      <view class="nearby__hud">
+    <scroll-view wx:else class="publish-view" scroll-y enhanced>
+      <view class="publish-page">
         <view class="hud-card">
           <view class="hud-card__row">
             <view class="hud-card__title">本地信息流</view>
@@ -50,11 +52,7 @@
             <t-button size="small" theme="primary" bind:tap="onOpenPublish">发布</t-button>
           </view>
         </view>
-      </view>
-    </view>
 
-    <scroll-view wx:else class="publish-view" scroll-y enhanced>
-      <view class="publish-page">
         <view class="publish-card">
           <view class="publish-card__title">我的 Home Base Address</view>
           <view class="publish-card__sub" wx:if="{{homeBase}}">
@@ -73,7 +71,7 @@
           <view wx:if="{{!isLoggedIn}}" class="hint">请先登录后设置地址</view>
         </view>
 
-        <view class="publish-card" style="margin-top: 20rpx;">
+        <view class="publish-card">
           <view class="publish-card__row">
             <view class="publish-card__title">我的发布</view>
             <t-button size="small" theme="primary" bind:tap="onOpenPublish" disabled="{{!isLoggedIn}}">发布</t-button>
