@@ -5,10 +5,16 @@ const api = require('../../utils/linkbridge/api');
 const POSTS_KEY = 'lb_nearby_posts_mock_v1';
 const HOME_BASE_KEY_PREFIX = 'lb_localfeed_home_base_v1_';
 const COOLDOWN_MS = 3 * 24 * 3600 * 1000;
+const HOMEBASE_GUIDE_KEY_PREFIX = 'lb_localfeed_homebase_guide_shown_v1_';
 
 function getHomeBaseKey(userId) {
   const id = String(userId || '').trim();
   return `${HOME_BASE_KEY_PREFIX}${id || 'anonymous'}`;
+}
+
+function getHomeBaseGuideKey(userId) {
+  const id = String(userId || '').trim();
+  return `${HOMEBASE_GUIDE_KEY_PREFIX}${id || 'anonymous'}`;
 }
 
 function safeParseJSON(raw, fallback) {
@@ -52,6 +58,18 @@ function distanceKm(aLat, aLng, bLat, bLng) {
   return R * c;
 }
 
+function formatRemaining(ms) {
+  const v = Number(ms);
+  if (!Number.isFinite(v) || v <= 0) return '0分钟';
+  const totalMinutes = Math.ceil(v / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes - days * 60 * 24) / 60);
+  const minutes = totalMinutes - days * 60 * 24 - hours * 60;
+  if (days > 0) return `${days}天${hours}小时`;
+  if (hours > 0) return `${hours}小时${minutes}分钟`;
+  return `${minutes}分钟`;
+}
+
 function loadPosts() {
   const raw = wx.getStorageSync(POSTS_KEY);
   const list = safeParseJSON(raw, []);
@@ -79,24 +97,163 @@ function decoratePost(p) {
   };
 }
 
-function toMarkers(posts) {
-  return (posts || [])
-    .filter((p) => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)))
-    .map((p, idx) => ({
+function normalizeIconPath(path) {
+  const p = String(path || '').trim();
+  if (!p) return '/static/chat/avatar.png';
+  if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('/')) return p;
+  return '/static/chat/avatar.png';
+}
+
+function buildPinsFromPosts(posts, myHomeBase, myUserId) {
+  const list = Array.isArray(posts) ? posts : [];
+  const map = new Map();
+  for (const p of list) {
+    const uid = String(p?.author?.userId || '').trim();
+    if (!uid) continue;
+    if (!map.has(uid)) {
+      map.set(uid, {
+        userId: uid,
+        displayName: String(p?.author?.displayName || ''),
+        avatarUrl: String(p?.author?.avatarUrl || ''),
+        lat: Number(p?.lat),
+        lng: Number(p?.lng),
+        posts: [],
+      });
+    }
+    map.get(uid).posts.push(p);
+  }
+
+  const pins = [];
+  for (const [, v] of map.entries()) {
+    const postsOfUser = (v.posts || []).slice().sort((a, b) => {
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+      return (b.createdAtMs || 0) - (a.createdAtMs || 0);
+    });
+    const top = postsOfUser[0];
+
+    let lat = Number(v.lat);
+    let lng = Number(v.lng);
+    if (myUserId && v.userId === myUserId && myHomeBase) {
+      lat = Number(myHomeBase.lat);
+      lng = Number(myHomeBase.lng);
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+    pins.push({
+      userId: v.userId,
+      displayName: v.displayName || '本地的人',
+      avatarUrl: v.avatarUrl,
+      lat,
+      lng,
+      postsCount: postsOfUser.length,
+      topText: String(top?.text || ''),
+      previewPosts: postsOfUser.slice(0, 3),
+    });
+  }
+
+  return pins;
+}
+
+function clusterPins(pins, scale) {
+  const s = Number(scale);
+  if (!Number.isFinite(s) || s >= 14) return (pins || []).map((p) => ({ type: 'pin', pin: p }));
+
+  const gridKm = s <= 10 ? 2.0 : s <= 12 ? 1.2 : 0.8;
+  const clusters = new Map();
+  for (const p of pins || []) {
+    const lat = Number(p.lat);
+    const lng = Number(p.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const latStep = gridKm / 110.574;
+    const lngStep = gridKm / (111.32 * Math.cos((lat * Math.PI) / 180) || 1);
+    const key = `${Math.floor(lat / latStep)}_${Math.floor(lng / lngStep)}`;
+    if (!clusters.has(key)) clusters.set(key, { latSum: 0, lngSum: 0, items: [] });
+    const c = clusters.get(key);
+    c.latSum += lat;
+    c.lngSum += lng;
+    c.items.push(p);
+  }
+
+  const out = [];
+  for (const [, c] of clusters.entries()) {
+    if (c.items.length === 1) out.push({ type: 'pin', pin: c.items[0] });
+    else {
+      out.push({
+        type: 'cluster',
+        count: c.items.length,
+        lat: c.latSum / c.items.length,
+        lng: c.lngSum / c.items.length,
+      });
+    }
+  }
+
+  out.sort((a, b) => {
+    const ca = a.type === 'cluster' ? a.count : 1;
+    const cb = b.type === 'cluster' ? b.count : 1;
+    return cb - ca;
+  });
+
+  return out;
+}
+
+function toMarkersFromItems(items, maxCount = 150) {
+  const out = [];
+  const meta = {};
+  const list = Array.isArray(items) ? items.slice(0, maxCount) : [];
+  list.forEach((it, idx) => {
+    if (it.type === 'cluster') {
+      const lat = Number(it.lat);
+      const lng = Number(it.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      meta[idx] = { type: 'cluster', lat, lng, count: it.count };
+      out.push({
+        id: idx,
+        latitude: lat,
+        longitude: lng,
+        width: 34,
+        height: 34,
+        iconPath: '/static/icon_map.png',
+        label: {
+          content: String(it.count),
+          color: '#ffffff',
+          fontSize: 12,
+          bgColor: '#0052d9',
+          borderRadius: 16,
+          padding: 6,
+          textAlign: 'center',
+        },
+        callout: {
+          content: `${it.count} 人`,
+          display: 'BYCLICK',
+          padding: 6,
+          borderRadius: 8,
+        },
+      });
+      return;
+    }
+
+    const p = it.pin;
+    const lat = Number(p?.lat);
+    const lng = Number(p?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    meta[idx] = { type: 'pin', userId: p.userId };
+    out.push({
       id: idx,
-      latitude: Number(p.lat),
-      longitude: Number(p.lng),
-      width: 34,
-      height: 34,
-      // Reuse an existing static asset to avoid missing-file compile/runtime issues.
-      iconPath: '/static/icon_map.png',
+      latitude: lat,
+      longitude: lng,
+      width: 42,
+      height: 42,
+      iconPath: normalizeIconPath(p.avatarUrl),
       callout: {
-        content: `${p.author?.displayName || '本地的人'}：${(p.text || '').slice(0, 12)}`,
+        content: `${p.displayName || '本地的人'}`,
         display: 'BYCLICK',
         padding: 6,
-        borderRadius: 8,
+        borderRadius: 10,
       },
-    }));
+    });
+  });
+
+  return { markers: out, markerMeta: meta };
 }
 
 function filterVisiblePosts(posts, viewerLat, viewerLng, nowMs) {
@@ -178,10 +335,15 @@ Page({
     modeIndicatorWidth: '50%',
 
     homeBase: null,
+    needHomeBase: false,
 
     posts: [],
+    pins: [],
     markers: [],
-    selectedPost: null,
+    markerMeta: {},
+    mapScale: 14,
+    selectedUser: null,
+    selectedUserPosts: [],
     detailVisible: false,
 
     myPosts: [],
@@ -205,6 +367,14 @@ Page({
     connectButtonHint: '',
   },
 
+  scheduleRefreshFeed() {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      this.refreshFeed();
+    }, 80);
+  },
+
   onShow() {
     const tabBar = typeof this.getTabBar === 'function' ? this.getTabBar() : null;
     if (tabBar && typeof tabBar.setActive === 'function') tabBar.setActive('nearby');
@@ -216,7 +386,8 @@ Page({
 
     const me = api.getUser() || {};
     const homeBase = loggedIn && me?.id ? loadHomeBase(me.id) : null;
-    this.setData({ homeBase });
+    const needHomeBase = !!loggedIn && !homeBase;
+    this.setData({ homeBase, needHomeBase });
 
     this.ensureLocation()
       .catch(() => null)
@@ -226,14 +397,48 @@ Page({
       });
 
     if (loggedIn) this.bindWs();
+
+    // Strong onboarding: if Home Base is missing, guide user to set it (once per user).
+    if (needHomeBase && me?.id) {
+      try {
+        const key = getHomeBaseGuideKey(me.id);
+        const shown = !!wx.getStorageSync(key);
+        if (!shown) {
+          wx.setStorageSync(key, 1);
+          wx.showModal({
+            title: '需要设置 Home Base Address',
+            content: '首次使用本地信息流需要设置一个固定地址点位，否则无法发布且你的头像点位不会出现在地图上。',
+            confirmText: '去设置',
+            cancelText: '稍后',
+            success: (res) => {
+              if (res?.confirm) this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
+            },
+          });
+        }
+      } catch (e) {
+        // ignore
+      }
+      // Default to publish view so the user sees the setup UI immediately.
+      this.setData({ viewMode: 'publish', modeIndicatorLeft: calcModeIndicatorLeft('publish') });
+    }
   },
 
   onHide() {
     this.unbindWs();
+    this.stopCooldownTimer();
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   },
 
   onUnload() {
     this.unbindWs();
+    this.stopCooldownTimer();
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   },
 
   bindWs() {
@@ -343,11 +548,34 @@ Page({
 
     const visible = filterVisiblePosts(posts, center.lat, center.lng, now);
     const myPosts = visible.filter((p) => (p?.author?.userId || '') && me?.id && p.author.userId === me.id);
-    const markerPosts = limitMarkers(visible, this.data.mapRegion, 120);
+
+    const myUserId = String(me?.id || '').trim();
+    const pins = buildPinsFromPosts(visible, this.data.homeBase, myUserId);
+
+    // Ensure the current user appears on the map once Home Base is set,
+    // even if they haven't published any posts yet (mock-friendly behavior).
+    if (myUserId && this.data.homeBase && !pins.some((p) => p.userId === myUserId)) {
+      pins.unshift({
+        userId: myUserId,
+        displayName: me?.displayName || me?.username || '我',
+        avatarUrl: me?.avatarUrl || '/static/chat/avatar.png',
+        lat: Number(this.data.homeBase.lat),
+        lng: Number(this.data.homeBase.lng),
+        postsCount: 0,
+        topText: '',
+        previewPosts: [],
+      });
+    }
+
+    const pinsInView = limitMarkers(pins, this.data.mapRegion, 300);
+    const clustered = clusterPins(pinsInView, this.data.mapScale);
+    const { markers, markerMeta } = toMarkersFromItems(clustered, 150);
 
     this.setData({
       posts: visible,
-      markers: toMarkers(markerPosts),
+      pins,
+      markers,
+      markerMeta,
       myPosts,
     });
   },
@@ -374,14 +602,35 @@ Page({
 
   onMarkerTap(e) {
     const id = Number(e?.detail?.markerId);
-    const posts = this.data.posts || [];
-    if (!Number.isFinite(id) || id < 0 || id >= posts.length) return;
-    const selectedPost = posts[id];
-    this.setData({ selectedPost, detailVisible: true }, () => {
-      this.refreshConnectUi();
-      const peerId = selectedPost?.author?.userId || '';
-      if (peerId) this.refreshRelationshipStatusForUser(peerId);
-    });
+    const meta = this.data.markerMeta?.[id];
+    if (!meta) return;
+
+    if (meta.type === 'cluster') {
+      const lat = Number(meta.lat);
+      const lng = Number(meta.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const cur = Number(this.data.mapScale) || 14;
+      const next = Math.min(18, cur + 2);
+      this.setData({ center: { lat, lng }, mapScale: next }, () => this.refreshFeed());
+      return;
+    }
+
+    const userId = String(meta.userId || '').trim();
+    if (!userId) return;
+    const pin = (this.data.pins || []).find((p) => p.userId === userId);
+    if (!pin) return;
+
+    this.setData(
+      {
+        selectedUser: { userId: pin.userId, displayName: pin.displayName, avatarUrl: pin.avatarUrl },
+        selectedUserPosts: pin.previewPosts || [],
+        detailVisible: true,
+      },
+      () => {
+        this.refreshConnectUi();
+        this.refreshRelationshipStatusForUser(userId);
+      }
+    );
   },
 
   onRegionChange(e) {
@@ -391,10 +640,14 @@ Page({
     const ctx = wx.createMapContext('lfMap', this);
     if (!ctx || typeof ctx.getCenterLocation !== 'function') return;
 
+    const nextScale = Number(e?.detail?.scale);
+    const scaleChanged = Number.isFinite(nextScale) && nextScale !== this.data.mapScale;
+    if (scaleChanged) this.setData({ mapScale: nextScale }, () => this.scheduleRefreshFeed());
+
     if (typeof ctx.getRegion === 'function') {
       ctx.getRegion({
         success: (res) => {
-          if (res?.southwest && res?.northeast) this.setData({ mapRegion: res });
+          if (res?.southwest && res?.northeast) this.setData({ mapRegion: res }, () => this.scheduleRefreshFeed());
         },
       });
     }
@@ -407,26 +660,33 @@ Page({
         // Avoid setData storms: only update when center changes enough.
         const prev = this.data.center || {};
         const d = distanceKm(Number(prev.lat), Number(prev.lng), lat, lng);
-        if (Number.isFinite(d) && d < 0.05) return; // ~50m
-        this.setData({ center: { lat, lng } }, () => this.refreshFeed());
+        if (Number.isFinite(d) && d < 0.05) {
+          if (!scaleChanged) return; // ~50m
+          this.scheduleRefreshFeed();
+          return;
+        }
+        this.setData({ center: { lat, lng } }, () => this.scheduleRefreshFeed());
       },
     });
   },
 
   onDetailVisibleChange(e) {
-    this.setData({ detailVisible: !!e?.detail?.visible });
+    const v = !!e?.detail?.visible;
+    this.setData({ detailVisible: v });
+    if (!v) this.stopCooldownTimer();
   },
 
   onCloseDetail() {
     this.setData({ detailVisible: false });
+    this.stopCooldownTimer();
   },
 
   onViewProfile() {
-    const selected = this.data.selectedPost;
-    const userId = selected?.author?.userId || '';
+    const selected = this.data.selectedUser;
+    const userId = selected?.userId || '';
     if (!userId) return;
-    const name = selected?.author?.displayName || '';
-    const avatarUrl = selected?.author?.avatarUrl || '';
+    const name = selected?.displayName || '';
+    const avatarUrl = selected?.avatarUrl || '';
     const url =
       `/pages/localfeed/profile/index?userId=${encodeURIComponent(userId)}` +
       (name ? `&name=${encodeURIComponent(name)}` : '') +
@@ -434,16 +694,15 @@ Page({
     wx.navigateTo({ url });
   },
 
-  onPreviewSelectedImage(e) {
-    const idx = Number(e?.currentTarget?.dataset?.index || 0);
-    const imgs = this.data.selectedPost?.images || [];
-    if (!imgs.length) return;
-    wx.previewImage({ urls: imgs, current: imgs[idx] || imgs[0] });
-  },
-
   onTapConnect() {
-    const selected = this.data.selectedPost;
-    const peerId = selected?.author?.userId || '';
+    if (this.data.needHomeBase) {
+      this.onShowToast('#t-toast', '请先设置 Home Base Address');
+      this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
+      return;
+    }
+
+    const selected = this.data.selectedUser;
+    const peerId = selected?.userId || '';
     if (!peerId) return;
 
     if (!api.isLoggedIn()) {
@@ -457,7 +716,7 @@ Page({
       return;
     }
     if (status.state === 'chat' && status.sessionId) {
-      const peerName = selected?.author?.displayName || '';
+      const peerName = selected?.displayName || '';
       const url =
         `/pages/chat/index?sessionId=${encodeURIComponent(status.sessionId)}` +
         (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '') +
@@ -470,7 +729,8 @@ Page({
       return;
     }
     if (status.state === 'cooldown' && status.untilMs) {
-      this.onShowToast('#t-toast', '对方已拒绝，请稍后再试');
+      const left = Math.max(0, Number(status.untilMs) - Date.now());
+      this.onShowToast('#t-toast', `冷却中，还需 ${formatRemaining(left)}`);
       return;
     }
 
@@ -490,8 +750,15 @@ Page({
   },
 
   onSendConnectRequest() {
-    const selected = this.data.selectedPost;
-    const peerId = selected?.author?.userId || '';
+    if (this.data.needHomeBase) {
+      wx.showToast({ title: '请先设置地址', icon: 'none' });
+      this.setData({ verificationVisible: false });
+      this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
+      return;
+    }
+
+    const selected = this.data.selectedUser;
+    const peerId = selected?.userId || '';
     if (!peerId) return;
 
     const msg = String(this.data.verificationText || '').trim();
@@ -617,8 +884,8 @@ Page({
   },
 
   refreshConnectUi() {
-    const selected = this.data.selectedPost;
-    const peerId = selected?.author?.userId || '';
+    const selected = this.data.selectedUser;
+    const peerId = selected?.userId || '';
     const me = api.getUser() || {};
 
     if (!peerId) {
@@ -633,6 +900,14 @@ Page({
       this.setData({ connectButtonText: '登录后申请', connectButtonDisabled: false, connectButtonHint: '需要先登录' });
       return;
     }
+    if (this.data.needHomeBase) {
+      this.setData({
+        connectButtonText: '请先设置地址',
+        connectButtonDisabled: false,
+        connectButtonHint: '首次使用需设置 Home Base Address',
+      });
+      return;
+    }
 
     const status = this.data.relationshipByUserId?.[peerId] || { state: 'none' };
     if (status.state === 'chat' && status.sessionId) {
@@ -644,7 +919,18 @@ Page({
       return;
     }
     if (status.state === 'cooldown') {
-      this.setData({ connectButtonText: '冷却中', connectButtonDisabled: true, connectButtonHint: '被拒绝后 3 天内不可重复发送' });
+      const until = Number(status.untilMs || 0);
+      const left = until ? until - Date.now() : COOLDOWN_MS;
+      if (until && left <= 0) {
+        this.setRelationshipStatus(peerId, { state: 'none', untilMs: 0 });
+        return;
+      }
+      this.setData({
+        connectButtonText: '冷却中',
+        connectButtonDisabled: true,
+        connectButtonHint: `还需 ${formatRemaining(left)}（被拒绝后 3 天内不可重复发送）`,
+      });
+      this.startCooldownTimer();
       return;
     }
     if (status.state === 'self') {
@@ -656,6 +942,23 @@ Page({
       return;
     }
     this.setData({ connectButtonText: '申请建立连接', connectButtonDisabled: false, connectButtonHint: '' });
+  },
+
+  startCooldownTimer() {
+    if (this.cooldownTimer) return;
+    this.cooldownTimer = setInterval(() => {
+      if (!this.data.detailVisible) {
+        this.stopCooldownTimer();
+        return;
+      }
+      this.refreshConnectUi();
+    }, 60 * 1000);
+  },
+
+  stopCooldownTimer() {
+    if (!this.cooldownTimer) return;
+    clearInterval(this.cooldownTimer);
+    this.cooldownTimer = null;
   },
 
   onAcceptRequest(e) {
@@ -712,6 +1015,15 @@ Page({
   },
 
   onOpenPublish() {
+    if (!api.isLoggedIn()) {
+      wx.navigateTo({ url: '/pages/login/login' });
+      return;
+    }
+    if (this.data.needHomeBase) {
+      wx.showToast({ title: '请先设置 Home Base Address', icon: 'none' });
+      this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
+      return;
+    }
     this.setData({ publishVisible: true });
   },
 
@@ -810,6 +1122,10 @@ Page({
       wx.navigateTo({ url: '/pages/login/login' });
       return;
     }
+    if (this.data.needHomeBase) {
+      wx.showToast({ title: '请先设置 Home Base Address', icon: 'none' });
+      return;
+    }
 
     const text = String(this.data.draft?.text || '').trim();
     const images = Array.isArray(this.data.draft?.images) ? this.data.draft.images.filter(Boolean) : [];
@@ -872,7 +1188,7 @@ Page({
           updatedAtMs: Date.now(),
         };
         saveHomeBase(me.id, hb);
-        this.setData({ homeBase: hb });
+        this.setData({ homeBase: hb, needHomeBase: false }, () => this.refreshFeed());
       })
       .finally(() => wx.hideLoading());
   },
@@ -906,7 +1222,7 @@ Page({
           updatedAtMs: Date.now(),
         };
         saveHomeBase(me.id, hb);
-        this.setData({ homeBase: hb });
+        this.setData({ homeBase: hb, needHomeBase: false }, () => this.refreshFeed());
       },
       fail: (err) => {
         const msg = String(err?.errMsg || '').toLowerCase();

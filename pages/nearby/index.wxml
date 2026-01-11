@@ -28,6 +28,7 @@
         class="nearby__map"
         latitude="{{center.lat}}"
         longitude="{{center.lng}}"
+        scale="{{mapScale}}"
         markers="{{markers}}"
         show-location
         enable-scroll
@@ -39,6 +40,20 @@
 
     <scroll-view wx:else class="publish-view" scroll-y enhanced>
       <view class="publish-page">
+        <view wx:if="{{needHomeBase}}" class="alert-card">
+          <view class="alert-card__title">首次使用需要设置 Home Base Address</view>
+          <view class="alert-card__desc">设置后，你的头像点位才会出现在地图上，也才能发布内容。</view>
+          <view class="alert-card__actions">
+            <t-button size="small" theme="primary" bind:tap="onSetHomeBaseToCurrent" disabled="{{!isLoggedIn}}">
+              用当前位置设置
+            </t-button>
+            <t-button size="small" variant="outline" theme="default" bind:tap="onChooseHomeBase" disabled="{{!isLoggedIn}}">
+              地图选点
+            </t-button>
+          </view>
+          <view wx:if="{{!isLoggedIn}}" class="hint">请先登录后设置地址</view>
+        </view>
+
         <view class="hud-card">
           <view class="hud-card__row">
             <view class="hud-card__title">本地信息流</view>
@@ -99,29 +114,27 @@
   <t-popup visible="{{detailVisible}}" placement="bottom" overlay bind:visible-change="onDetailVisibleChange">
     <view class="sheet">
       <view class="sheet__header">
-        <view class="sheet__title">动态详情</view>
+        <view class="sheet__title">信息源预览</view>
         <t-icon name="close" size="48rpx" bind:tap="onCloseDetail" />
       </view>
 
-      <view wx:if="{{selectedPost}}" class="post">
+      <view wx:if="{{selectedUser}}" class="post">
         <view class="post__head">
-          <t-avatar image="{{selectedPost.author.avatarUrl || '/static/chat/avatar.png'}}" size="small" />
+          <t-avatar image="{{selectedUser.avatarUrl || '/static/chat/avatar.png'}}" size="small" />
           <view class="post__meta">
-            <view class="post__name">{{selectedPost.author.displayName || '本地的人'}}</view>
-            <view class="post__time">{{selectedPost.createdAtText}} · 有效至 {{selectedPost.expiresAtText}}</view>
+            <view class="post__name">{{selectedUser.displayName || '本地的人'}}</view>
+            <view class="post__time">点击「查看信息源」浏览其发布</view>
           </view>
         </view>
-        <view wx:if="{{selectedPost.text}}" class="post__text">{{selectedPost.text}}</view>
-        <view wx:if="{{selectedPost.images && selectedPost.images.length}}" class="post__images">
-          <image
-            wx:for="{{selectedPost.images}}"
-            wx:key="index"
-            class="post__img"
-            mode="aspectFill"
-            src="{{item}}"
-            bind:tap="onPreviewSelectedImage"
-            data-index="{{index}}"
-          />
+
+        <view wx:if="{{selectedUserPosts && selectedUserPosts.length}}" class="preview">
+          <view class="preview__title">最近发布</view>
+          <view wx:for="{{selectedUserPosts}}" wx:key="id" class="preview__item">
+            <view class="preview__text">{{item.text || '（图片）'}}</view>
+            <view class="preview__meta">
+              半径 {{item.radiusKm}}km · 有效至 {{item.expiresAtText}}
+            </view>
+          </view>
         </view>
 
         <view class="sheet__actions">

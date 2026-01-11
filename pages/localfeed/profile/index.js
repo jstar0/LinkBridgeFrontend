@@ -127,4 +127,13 @@ Page({
 
     this.setData({ posts, loading: false });
   },
+
+  onPreviewImage(e) {
+    const postId = String(e?.currentTarget?.dataset?.postid || '').trim();
+    const idx = Number(e?.currentTarget?.dataset?.index || 0);
+    const post = (this.data.posts || []).find((p) => String(p?.id || '') === postId);
+    const imgs = Array.isArray(post?.images) ? post.images.filter(Boolean) : [];
+    if (!imgs.length) return;
+    wx.previewImage({ urls: imgs, current: imgs[idx] || imgs[0] });
+  },
 });

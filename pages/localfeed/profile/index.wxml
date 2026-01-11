@@ -18,9 +18,27 @@
           <view class="post__title">{{item.text || '（图片）'}}</view>
           <t-tag wx:if="{{item.pinned}}" class="post__tag" variant="light">置顶</t-tag>
         </view>
-        <view class="post__meta">半径 {{item.radiusKm}}km · 有效至 {{item.expiresAtText}}</view>
+
+        <view wx:if="{{item.images && item.images.length}}" class="post__images">
+          <image
+            wx:for="{{item.images}}"
+            wx:for-item="img"
+            wx:key="index"
+            class="post__img"
+            mode="aspectFill"
+            src="{{img}}"
+            data-postid="{{item.id}}"
+            data-index="{{index}}"
+            bindtap="onPreviewImage"
+          />
+        </view>
+
+        <view class="post__meta">
+          {{item.createdAtText}} · 半径 {{item.radiusKm}}km · 有效至 {{item.expiresAtText}}
+        </view>
       </view>
+
+      <view class="footer-hint">已按发布者设置的有效期/半径做展示裁剪</view>
     </view>
   </view>
 </view>
-
