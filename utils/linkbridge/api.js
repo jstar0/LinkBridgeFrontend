@@ -321,6 +321,121 @@ function createLocalFeedRelationshipRequest(addresseeId, verificationMessage) {
   }).then((res) => res);
 }
 
+/**
+ * Local Feed: get current user's Home Base Address.
+ *
+ * GET /v1/localfeed/home-base
+ * Response:
+ * - homeBase: { name?: string, lat: number, lng: number, updatedAtMs: number } | null
+ *
+ * Error codes:
+ * - TOKEN_INVALID / TOKEN_EXPIRED
+ */
+function getLocalFeedHomeBase() {
+  return request('GET', '/v1/localfeed/home-base').then((res) => res.homeBase ?? null);
+}
+
+/**
+ * Local Feed: set/update current user's Home Base Address.
+ *
+ * PUT /v1/localfeed/home-base
+ * Request body:
+ * - name?: string
+ * - lat: number (required)
+ * - lng: number (required)
+ *
+ * Response:
+ * - homeBase: { name?: string, lat: number, lng: number, updatedAtMs: number }
+ *
+ * Error codes (suggested; backend may add more):
+ * - TOKEN_INVALID / TOKEN_EXPIRED
+ * - VALIDATION
+ * - HOME_BASE_DAILY_LIMIT (daily max 1 change; reset at 00:00)
+ */
+function setLocalFeedHomeBase({ name, lat, lng }) {
+  const n = String(name || '').trim();
+  const la = Number(lat);
+  const ln = Number(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return Promise.reject({ code: 'VALIDATION', message: 'invalid lat/lng' });
+  return request('PUT', '/v1/localfeed/home-base', { name: n, lat: la, lng: ln }).then((res) => res.homeBase);
+}
+
+/**
+ * Local Feed: create a post.
+ *
+ * POST /v1/localfeed/posts
+ * Request body:
+ * - text?: string
+ * - images?: string[]        // already-uploaded URLs or server-side file ids (TBD)
+ * - pinned?: boolean
+ * - radiusKm: number         // visibility radius
+ * - expiresAtMs: number      // absolute expire time
+ *
+ * Response:
+ * - post: { id, author, text, images, pinned, radiusKm, createdAtMs, expiresAtMs, ... }
+ *
+ * Error codes:
+ * - TOKEN_INVALID / TOKEN_EXPIRED
+ * - VALIDATION
+ */
+function createLocalFeedPost(payload) {
+  return request('POST', '/v1/localfeed/posts', payload).then((res) => res.post);
+}
+
+/**
+ * Local Feed: list my posts.
+ *
+ * GET /v1/localfeed/posts/mine
+ * Response: { posts: Post[] }
+ */
+function listMyLocalFeedPosts() {
+  return request('GET', '/v1/localfeed/posts/mine').then((res) => res.posts || []);
+}
+
+/**
+ * Local Feed: delete my post.
+ *
+ * DELETE /v1/localfeed/posts/:id
+ * Response: { ok: true }
+ */
+function deleteLocalFeedPost(postId) {
+  const id = String(postId || '').trim();
+  if (!id) return Promise.reject({ code: 'VALIDATION', message: 'postId is required' });
+  return request('DELETE', `/v1/localfeed/posts/${encodeURIComponent(id)}`).then((res) => res);
+}
+
+/**
+ * Local Feed: list map pins for current view.
+ *
+ * GET /v1/localfeed/map/pins?bbox=swLat,swLng,neLat,neLng&zoom=...&limit=...
+ * Response: { pins: Pin[] }
+ *
+ * Pin schema (suggested):
+ * - userId: string
+ * - displayName: string
+ * - avatarUrl: string
+ * - lat: number
+ * - lng: number
+ * - hasPosts: boolean
+ */
+function listLocalFeedPins({ bbox, zoom, limit }) {
+  const qs = `bbox=${encodeURIComponent(bbox || '')}&zoom=${encodeURIComponent(zoom ?? '')}&limit=${encodeURIComponent(limit ?? '')}`;
+  return request('GET', `/v1/localfeed/map/pins?${qs}`).then((res) => res.pins || []);
+}
+
+/**
+ * Local Feed: list a user's visible posts for the current viewer.
+ *
+ * GET /v1/localfeed/users/:userId/posts?viewerLat=...&viewerLng=...
+ * Response: { posts: Post[] }
+ */
+function listLocalFeedUserPosts(userId, viewerLat, viewerLng) {
+  const uid = String(userId || '').trim();
+  if (!uid) return Promise.reject({ code: 'VALIDATION', message: 'userId is required' });
+  const qs = `viewerLat=${encodeURIComponent(viewerLat ?? '')}&viewerLng=${encodeURIComponent(viewerLng ?? '')}`;
+  return request('GET', `/v1/localfeed/users/${encodeURIComponent(uid)}/posts?${qs}`).then((res) => res.posts || []);
+}
+
 function listSessionRequests(box = 'in', status = 'pending') {
   const qs = `box=${encodeURIComponent(box)}&status=${encodeURIComponent(status)}`;
   return request('GET', `/v1/session-requests?${qs}`).then((res) => res.requests || []);
@@ -488,6 +603,13 @@ module.exports = {
   getVoipSign,
   consumeSessionInvite,
   createLocalFeedRelationshipRequest,
+  getLocalFeedHomeBase,
+  setLocalFeedHomeBase,
+  createLocalFeedPost,
+  listMyLocalFeedPosts,
+  deleteLocalFeedPost,
+  listLocalFeedPins,
+  listLocalFeedUserPosts,
   listSessionRequests,
   acceptSessionRequest,
   rejectSessionRequest,

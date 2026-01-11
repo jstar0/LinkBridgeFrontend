@@ -119,6 +119,26 @@ function filterVisiblePosts(posts, viewerLat, viewerLng, nowMs) {
     });
 }
 
+function inBbox(lat, lng, bbox) {
+  const b = bbox || {};
+  const sw = b?.southwest || b?.sw;
+  const ne = b?.northeast || b?.ne;
+  const swLat = Number(sw?.latitude ?? sw?.lat);
+  const swLng = Number(sw?.longitude ?? sw?.lng);
+  const neLat = Number(ne?.latitude ?? ne?.lat);
+  const neLng = Number(ne?.longitude ?? ne?.lng);
+  if (![swLat, swLng, neLat, neLng].every(Number.isFinite)) return true;
+  return lat >= swLat && lat <= neLat && lng >= swLng && lng <= neLng;
+}
+
+function limitMarkers(posts, bbox, maxCount) {
+  const list = Array.isArray(posts) ? posts : [];
+  const max = Number(maxCount) > 0 ? Number(maxCount) : 120;
+  const filtered = list.filter((p) => inBbox(Number(p.lat), Number(p.lng), bbox));
+  if (filtered.length <= max) return filtered;
+  return filtered.slice(0, max);
+}
+
 function loadHomeBase(userId) {
   const raw = wx.getStorageSync(getHomeBaseKey(userId));
   const obj = safeParseJSON(raw, null);
@@ -165,6 +185,8 @@ Page({
     detailVisible: false,
 
     myPosts: [],
+
+    mapRegion: null,
 
     requestsVisible: false,
     loadingRequests: false,
@@ -321,10 +343,11 @@ Page({
 
     const visible = filterVisiblePosts(posts, center.lat, center.lng, now);
     const myPosts = visible.filter((p) => (p?.author?.userId || '') && me?.id && p.author.userId === me.id);
+    const markerPosts = limitMarkers(visible, this.data.mapRegion, 120);
 
     this.setData({
       posts: visible,
-      markers: toMarkers(visible),
+      markers: toMarkers(markerPosts),
       myPosts,
     });
   },
@@ -367,6 +390,15 @@ Page({
     if (typeof wx?.createMapContext !== 'function') return;
     const ctx = wx.createMapContext('lfMap', this);
     if (!ctx || typeof ctx.getCenterLocation !== 'function') return;
+
+    if (typeof ctx.getRegion === 'function') {
+      ctx.getRegion({
+        success: (res) => {
+          if (res?.southwest && res?.northeast) this.setData({ mapRegion: res });
+        },
+      });
+    }
+
     ctx.getCenterLocation({
       success: (res) => {
         const lat = Number(res?.latitude);

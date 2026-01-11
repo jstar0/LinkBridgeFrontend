@@ -21,3 +21,8 @@
 5) Home Base Address “每天最多修改 1 次”的限制：
    - 默认由后端进行校验并返回错误码/提示文案；前端当前未在本地强制限制（仅提供 UI 入口）。
 
+6) Local Feed 真实接口（需后端实现；前端已在 `api.js` 写契约，当前 UI 仍用本地 mock）：
+   - `GET/PUT /v1/localfeed/home-base`
+   - `POST/GET/DELETE /v1/localfeed/posts...`
+   - `GET /v1/localfeed/map/pins`
+   - `GET /v1/localfeed/users/:id/posts`
