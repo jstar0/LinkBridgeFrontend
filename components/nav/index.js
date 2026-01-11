@@ -18,6 +18,11 @@ Component({
         isSidebar: true,
       },
       {
+        title: '附近',
+        url: 'pages/nearby/index',
+        isSidebar: true,
+      },
+      {
         title: '我的',
         url: 'pages/my/index',
         isSidebar: true,

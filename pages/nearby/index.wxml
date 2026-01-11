@@ -1,0 +1,163 @@
+<t-toast id="t-toast" />
+
+<view class="nearby">
+  <nav title-text="附近" />
+
+  <map
+    class="nearby__map"
+    latitude="{{center.lat}}"
+    longitude="{{center.lng}}"
+    markers="{{markers}}"
+    show-location
+    enable-scroll
+    enable-zoom
+    bindmarkertap="onMarkerTap"
+  />
+
+  <view class="nearby__hud">
+    <view class="hud-card">
+      <view class="hud-card__row">
+        <view class="hud-card__title">1.1km 附近动态</view>
+        <view class="hud-card__sub">{{locationStatus}}</view>
+      </view>
+      <view class="hud-card__actions">
+        <t-button size="small" variant="outline" theme="default" bind:tap="onRefresh">刷新</t-button>
+        <t-button size="small" variant="outline" theme="default" bind:tap="onOpenRequests">
+          请求 {{pendingRequests.length}}
+        </t-button>
+        <t-button size="small" theme="primary" bind:tap="onOpenPublish">发布</t-button>
+      </view>
+    </view>
+  </view>
+
+  <t-popup visible="{{detailVisible}}" placement="bottom" overlay bind:visible-change="onDetailVisibleChange">
+    <view class="sheet">
+      <view class="sheet__header">
+        <view class="sheet__title">动态详情</view>
+        <t-icon name="close" size="48rpx" bind:tap="onCloseDetail" />
+      </view>
+
+      <view wx:if="{{selectedPost}}" class="post">
+        <view class="post__head">
+          <t-avatar image="{{selectedPost.author.avatarUrl || '/static/chat/avatar.png'}}" size="small" />
+          <view class="post__meta">
+            <view class="post__name">{{selectedPost.author.displayName || '附近的人'}}</view>
+            <view class="post__time">{{selectedPost.createdAtText}} · 有效至 {{selectedPost.expiresAtText}}</view>
+          </view>
+        </view>
+        <view wx:if="{{selectedPost.text}}" class="post__text">{{selectedPost.text}}</view>
+        <view wx:if="{{selectedPost.images && selectedPost.images.length}}" class="post__images">
+          <image
+            wx:for="{{selectedPost.images}}"
+            wx:key="index"
+            class="post__img"
+            mode="aspectFill"
+            src="{{item}}"
+            bind:tap="onPreviewSelectedImage"
+            data-index="{{index}}"
+          />
+        </view>
+
+        <view class="sheet__actions">
+          <t-button theme="default" variant="outline" block bind:tap="onCloseDetail">关闭</t-button>
+          <t-button
+            theme="primary"
+            block
+            style="margin-top: 16rpx;"
+            disabled="{{!selectedPost.inviteCode}}"
+            bind:tap="onApplyConnect"
+          >
+            申请建立连接
+          </t-button>
+          <view wx:if="{{!selectedPost.inviteCode}}" class="hint">此动态暂未提供连接入口（需后端支持）</view>
+        </view>
+      </view>
+    </view>
+  </t-popup>
+
+  <t-popup visible="{{requestsVisible}}" placement="bottom" overlay bind:visible-change="onRequestsVisibleChange">
+    <view class="sheet">
+      <view class="sheet__header">
+        <view class="sheet__title">连接请求</view>
+        <t-icon name="close" size="48rpx" bind:tap="onCloseRequests" />
+      </view>
+
+      <view wx:if="{{!isLoggedIn}}" class="empty">请先登录后查看请求</view>
+      <view wx:elif="{{loadingRequests}}" class="empty">加载中…</view>
+      <view wx:elif="{{!pendingRequests.length}}" class="empty">暂无请求</view>
+
+      <t-cell-group wx:else theme="card">
+        <t-cell
+          wx:for="{{pendingRequests}}"
+          wx:key="id"
+          title="{{item.user.displayName || '对方'}}"
+          description="申请建立会话"
+          image="{{item.user.avatarUrl || '/static/chat/avatar.png'}}"
+        >
+          <view slot="right-icon" class="req-actions">
+            <t-button size="small" theme="primary" variant="base" bind:tap="onAcceptRequest" data-id="{{item.id}}"
+              >同意</t-button
+            >
+            <t-button
+              size="small"
+              theme="default"
+              variant="outline"
+              style="margin-left: 12rpx;"
+              bind:tap="onRejectRequest"
+              data-id="{{item.id}}"
+            >
+              拒绝
+            </t-button>
+          </view>
+        </t-cell>
+      </t-cell-group>
+    </view>
+  </t-popup>
+
+  <t-popup visible="{{publishVisible}}" placement="bottom" overlay bind:visible-change="onPublishVisibleChange">
+    <view class="sheet">
+      <view class="sheet__header">
+        <view class="sheet__title">发布动态</view>
+        <t-icon name="close" size="48rpx" bind:tap="onClosePublish" />
+      </view>
+
+      <view class="publish">
+        <textarea
+          class="publish__textarea"
+          placeholder="写点什么…"
+          value="{{draft.text}}"
+          maxlength="500"
+          bindinput="onDraftTextInput"
+          disabled="{{!isLoggedIn}}"
+        />
+
+        <view class="publish__row">
+          <view class="publish__label">有效期（小时）</view>
+          <input
+            class="publish__input"
+            type="number"
+            value="{{draft.ttlHours}}"
+            placeholder="例如 24"
+            bindinput="onTtlHoursInput"
+            disabled="{{!isLoggedIn}}"
+          />
+        </view>
+
+        <view wx:if="{{draft.images && draft.images.length}}" class="images">
+          <view wx:for="{{draft.images}}" wx:key="index" class="images__item">
+            <image class="images__img" mode="aspectFill" src="{{item}}" bind:tap="onPreviewDraftImage" data-index="{{index}}" />
+            <view class="images__remove" bind:tap="onRemoveDraftImage" data-index="{{index}}">
+              <t-icon name="close-circle-filled" size="36rpx" color="#fa5151" />
+            </view>
+          </view>
+        </view>
+
+        <view class="publish__actions">
+          <t-button theme="default" variant="outline" bind:tap="onPickImages" disabled="{{!isLoggedIn}}">选图</t-button>
+          <t-button theme="primary" bind:tap="onPublish" disabled="{{!isLoggedIn}}">发布</t-button>
+        </view>
+        <view wx:if="{{!isLoggedIn}}" class="hint">请先登录后再发布</view>
+      </view>
+    </view>
+  </t-popup>
+</view>

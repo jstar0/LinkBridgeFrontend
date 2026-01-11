@@ -6,13 +6,18 @@
         <view wx:if="{{ unreadNum > 0 }}" class="lb-tabbar__dot" />
       </view>
     </view>
+    <view class="lb-tabbar__tab {{ value === 'nearby' ? 'is-active' : '' }}" data-value="nearby" bindtap="onTap">
+      <view class="lb-tabbar__tab-inner">
+        <text class="lb-tabbar__label">附近</text>
+      </view>
+    </view>
     <view class="lb-tabbar__tab {{ value === 'my' ? 'is-active' : '' }}" data-value="my" bindtap="onTap">
       <view class="lb-tabbar__tab-inner">
         <text class="lb-tabbar__label">我的</text>
       </view>
     </view>
 
-    <view class="lb-tabbar__indicator" style="left: {{ indicatorLeft }};">
+    <view class="lb-tabbar__indicator" style="left: {{ indicatorLeft }}; width: {{ indicatorWidth }};">
       <view class="lb-tabbar__indicator-bar" />
     </view>
   </view>

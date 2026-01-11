@@ -5,11 +5,17 @@ Component({
     value: '', // 初始值设置为空，避免第一次加载时闪烁
     unreadNum: 0, // 未读消息数量
     indicatorLeft: '0%',
+    indicatorWidth: '50%',
     list: [
       {
         icon: 'chat',
         value: 'message',
         label: '会话',
+      },
+      {
+        icon: 'location',
+        value: 'nearby',
+        label: '附近',
       },
       {
         icon: 'user',
@@ -21,6 +27,7 @@ Component({
   lifetimes: {
     ready() {
       this.syncRouteValue();
+      this.setData({ indicatorWidth: this.calcIndicatorWidth() });
 
       // 同步全局未读消息数量
       this.setUnreadNum(app.globalData.unreadNum);
@@ -35,12 +42,24 @@ Component({
     },
   },
   methods: {
+    calcIndicatorLeft(value) {
+      const idx = this.data.list.findIndex((t) => t.value === value);
+      const total = Math.max(1, this.data.list.length);
+      const safeIdx = idx >= 0 ? idx : 0;
+      return `${(safeIdx * 100) / total}%`;
+    },
+
+    calcIndicatorWidth() {
+      const total = Math.max(1, this.data.list.length);
+      return `${100 / total}%`;
+    },
+
     onTap(e) {
       const value = e?.currentTarget?.dataset?.value || '';
       if (!value) return;
       if (value === this.data.value) return;
 
-      const indicatorLeft = value === 'my' ? '50%' : '0%';
+      const indicatorLeft = this.calcIndicatorLeft(value);
       // Ensure the underline updates on the first tap (setData callback before switchTab).
       this.setData({ value, indicatorLeft }, () => {
         wx.switchTab({ url: `/pages/${value}/index` });
@@ -56,7 +75,8 @@ Component({
       if (!value) return;
       this.setData({
         value,
-        indicatorLeft: value === 'my' ? '50%' : '0%',
+        indicatorLeft: this.calcIndicatorLeft(value),
+        indicatorWidth: this.calcIndicatorWidth(),
       });
     },
 
@@ -73,7 +93,7 @@ Component({
       const route = curPage?.route || '';
       const match = /pages\/(\w+)\/index/.exec(route);
       const value = match?.[1] || '';
-      if (value === 'message' || value === 'my') this.setValue(value);
+      if (value === 'message' || value === 'nearby' || value === 'my') this.setValue(value);
     },
   },
 });
