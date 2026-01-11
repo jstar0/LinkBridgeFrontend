@@ -56,7 +56,6 @@
 
         <view class="hud-card">
           <view class="hud-card__row">
-            <view class="hud-card__title">本地信息流</view>
             <view class="hud-card__sub">{{locationStatus}}</view>
           </view>
           <view class="hud-card__actions">
@@ -69,7 +68,7 @@
         </view>
 
         <view class="publish-card">
-          <view class="publish-card__title">我的固定地址点位</view>
+          <view class="publish-card__title">我的位置</view>
           <view class="publish-card__sub" wx:if="{{homeBase}}">
             已设置：{{homeBase.name || '我的位置'}}（{{homeBase.latText}}, {{homeBase.lngText}}）
           </view>
@@ -89,7 +88,6 @@
         <view class="publish-card">
           <view class="publish-card__row">
             <view class="publish-card__title">我的发布</view>
-            <t-button size="small" theme="primary" bind:tap="onOpenPublish" disabled="{{!isLoggedIn}}">发布</t-button>
           </view>
 
           <view wx:if="{{!isLoggedIn}}" class="empty">请先登录后查看与发布内容</view>
