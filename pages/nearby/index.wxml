@@ -41,7 +41,7 @@
     <scroll-view wx:else class="publish-view" scroll-y enhanced>
       <view class="publish-page">
         <view wx:if="{{needHomeBase}}" class="alert-card">
-          <view class="alert-card__title">首次使用需要设置 Home Base Address</view>
+          <view class="alert-card__title">首次使用需要设置固定地址点位</view>
           <view class="alert-card__desc">设置后，你的头像点位才会出现在地图上，也才能发布内容。</view>
           <view class="alert-card__actions">
             <t-button size="small" theme="primary" bind:tap="onSetHomeBaseToCurrent" disabled="{{!isLoggedIn}}">
@@ -69,7 +69,7 @@
         </view>
 
         <view class="publish-card">
-          <view class="publish-card__title">我的 Home Base Address</view>
+          <view class="publish-card__title">我的固定地址点位</view>
           <view class="publish-card__sub" wx:if="{{homeBase}}">
             已设置：{{homeBase.name || '我的位置'}}（{{homeBase.latText}}, {{homeBase.lngText}}）
           </view>

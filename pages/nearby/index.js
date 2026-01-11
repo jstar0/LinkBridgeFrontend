@@ -406,7 +406,7 @@ Page({
         if (!shown) {
           wx.setStorageSync(key, 1);
           wx.showModal({
-            title: '需要设置 Home Base Address',
+            title: '需要设置固定地址点位',
             content: '首次使用本地信息流需要设置一个固定地址点位，否则无法发布且你的头像点位不会出现在地图上。',
             confirmText: '去设置',
             cancelText: '稍后',
@@ -696,7 +696,7 @@ Page({
 
   onTapConnect() {
     if (this.data.needHomeBase) {
-      this.onShowToast('#t-toast', '请先设置 Home Base Address');
+      this.onShowToast('#t-toast', '请先设置固定地址点位');
       this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
       return;
     }
@@ -904,7 +904,7 @@ Page({
       this.setData({
         connectButtonText: '请先设置地址',
         connectButtonDisabled: false,
-        connectButtonHint: '首次使用需设置 Home Base Address',
+        connectButtonHint: '首次使用需先设置固定地址点位',
       });
       return;
     }
@@ -1020,7 +1020,7 @@ Page({
       return;
     }
     if (this.data.needHomeBase) {
-      wx.showToast({ title: '请先设置 Home Base Address', icon: 'none' });
+      wx.showToast({ title: '请先设置固定地址点位', icon: 'none' });
       this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
       return;
     }
@@ -1123,7 +1123,7 @@ Page({
       return;
     }
     if (this.data.needHomeBase) {
-      wx.showToast({ title: '请先设置 Home Base Address', icon: 'none' });
+      wx.showToast({ title: '请先设置固定地址点位', icon: 'none' });
       return;
     }
 
