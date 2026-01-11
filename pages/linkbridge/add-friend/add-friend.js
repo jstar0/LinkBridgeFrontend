@@ -41,8 +41,8 @@ Page({
     if (!code) {
       this.setData({
         loading: false,
-        title: '无效二维码',
-        desc: '未识别到邀请码（scene 解析失败），请重新扫码或让对方刷新二维码。',
+        title: '无效微信码',
+        desc: '未识别到邀请码（scene 解析失败），请重新扫码或让对方刷新微信码。',
         showLogin: false,
       });
       return;

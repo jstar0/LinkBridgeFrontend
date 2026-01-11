@@ -15,7 +15,7 @@ Component({
       {
         icon: 'location',
         value: 'nearby',
-        label: '附近',
+        label: '本地',
       },
       {
         icon: 'user',

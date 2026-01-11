@@ -2,15 +2,15 @@
 <view class="page home">
   <view class="home__card">
     <view class="home__title">LinkBridge</view>
-    <view class="home__subtitle">通过二维码建立临时会话</view>
+    <view class="home__subtitle">通过微信码建立临时会话</view>
 
     <view class="home__steps">
-      <view class="home__step">1. 登录后进入「我的」查看会话二维码</view>
+      <view class="home__step">1. 登录后进入「我的」查看会话微信码</view>
       <view class="home__step">2. 让对方扫一扫即可建立会话并进入聊天</view>
       <view class="home__step">3. 会话结束后可在「消息」里归档</view>
     </view>
 
-    <t-button theme="primary" size="large" block bindtap="goMy">打开我的二维码</t-button>
+    <t-button theme="primary" size="large" block bindtap="goMy">打开我的微信码</t-button>
     <t-button theme="default" variant="outline" size="large" block style="margin-top: 16rpx;" bindtap="goMessage">
       查看会话列表
     </t-button>

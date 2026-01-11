@@ -224,8 +224,18 @@ Page({
           items.map((r) =>
             api
               .getUserById(r.requesterId)
-              .then((u) => ({ id: r.id, requesterId: r.requesterId, user: u || { id: r.requesterId, displayName: '对方' } }))
-              .catch(() => ({ id: r.id, requesterId: r.requesterId, user: { id: r.requesterId, displayName: '对方' } }))
+              .then((u) => ({
+                id: r.id,
+                requesterId: r.requesterId,
+                request: r,
+                user: u || { id: r.requesterId, displayName: '对方' },
+              }))
+              .catch(() => ({
+                id: r.id,
+                requesterId: r.requesterId,
+                request: r,
+                user: { id: r.requesterId, displayName: '对方' },
+              }))
           )
         );
       })

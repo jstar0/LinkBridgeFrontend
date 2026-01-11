@@ -10,7 +10,7 @@
     "t-avatar": "tdesign-miniprogram/avatar/avatar",
     "t-tag": "tdesign-miniprogram/tag/tag",
     "t-toast": "tdesign-miniprogram/toast/toast",
-    "nav": "/components/nav"
+    "nav": "/components/nav",
+    "scan-fab": "/components/scan-fab"
   }
 }
-

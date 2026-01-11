@@ -60,19 +60,29 @@ function isLoggedIn() {
   return !!getToken();
 }
 
-function request(method, path, data) {
+/**
+ * Low-level HTTP request wrapper (the only place allowed to call `wx.request`).
+ *
+ * @param {string} method
+ * @param {string} path - relative path, e.g. `/v1/auth/me`
+ * @param {any} data
+ * @param {{ responseType?: 'text'|'arraybuffer', header?: Record<string,string> }} [options]
+ */
+function request(method, path, data, options = {}) {
   return new Promise((resolve, reject) => {
     const token = getToken();
     const header = { 'Content-Type': 'application/json' };
     if (token) {
       header.Authorization = `Bearer ${token}`;
     }
+    if (options && options.header) Object.assign(header, options.header);
 
     wx.request({
       url: `${getBaseUrl()}${path}`,
       method,
       data,
       header,
+      responseType: options?.responseType,
       success(res) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data);
@@ -89,6 +99,21 @@ function request(method, path, data) {
       fail(err) {
         reject({ code: 'network', message: err?.errMsg || 'Network error' });
       },
+    });
+  });
+}
+
+/**
+ * Raw request helper for non-JSON endpoints (kept here to satisfy the "api.js only" networking rule).
+ *
+ * @param {import('miniprogram-api-typings').WxRequestOption} options
+ */
+function wxRequest(options) {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      ...options,
+      success: (res) => resolve(res),
+      fail: (err) => reject(err),
     });
   });
 }
@@ -264,6 +289,38 @@ function consumeSessionInvite(code) {
   return request('POST', '/v1/session-requests/invites/consume', { code }).then((res) => res);
 }
 
+/**
+ * Create a "map/local feed" relationship request (request -> accept -> session created).
+ *
+ * POST /v1/session-requests
+ * Request body:
+ * - addresseeId: string (required)        // target user id
+ * - source: 'localfeed' (required)       // relationship source (map/local feed)
+ * - verificationMessage: string (optional, max ~120 chars suggested)
+ *
+ * Response:
+ * - request: { id, requesterId, addresseeId, status, createdAtMs, updatedAtMs }
+ * - created: boolean
+ * - hint?: string
+ *
+ * Error codes (suggested; backend may add more):
+ * - TOKEN_INVALID / TOKEN_EXPIRED
+ * - VALIDATION
+ * - SESSION_REQUEST_EXISTS
+ * - LOCALFEED_REQUEST_DAILY_LIMIT (daily max 10)
+ * - LOCALFEED_REQUEST_COOLDOWN (cooldown 3 days after rejection)
+ */
+function createLocalFeedRelationshipRequest(addresseeId, verificationMessage) {
+  const addressee = String(addresseeId || '').trim();
+  const msg = String(verificationMessage || '').trim();
+  if (!addressee) return Promise.reject({ code: 'VALIDATION', message: 'addresseeId is required' });
+  return request('POST', '/v1/session-requests', {
+    addresseeId: addressee,
+    source: 'localfeed',
+    verificationMessage: msg ? msg.slice(0, 120) : '',
+  }).then((res) => res);
+}
+
 function listSessionRequests(box = 'in', status = 'pending') {
   const qs = `box=${encodeURIComponent(box)}&status=${encodeURIComponent(status)}`;
   return request('GET', `/v1/session-requests?${qs}`).then((res) => res.requests || []);
@@ -287,6 +344,15 @@ function getMySessionQrImageUrl(cacheBuster = Date.now()) {
   return `${getBaseUrl()}/v1/wechat/qrcode/session?token=${encodeURIComponent(token)}&t=${encodeURIComponent(
     cacheBuster
   )}`;
+}
+
+/**
+ * GET /v1/wechat/qrcode/session
+ * Response: PNG binary (arraybuffer)
+ * Errors: TOKEN_INVALID/TOKEN_EXPIRED/WECHAT_NOT_CONFIGURED/...
+ */
+function getMyWeChatCodePng() {
+  return request('GET', '/v1/wechat/qrcode/session', null, { responseType: 'arraybuffer' });
 }
 
 // WebSocket connection (single instance)
@@ -395,6 +461,7 @@ module.exports = {
   clearAuth,
   isLoggedIn,
   request,
+  wxRequest,
   register,
   login,
   logout,
@@ -420,11 +487,13 @@ module.exports = {
   endCall,
   getVoipSign,
   consumeSessionInvite,
+  createLocalFeedRelationshipRequest,
   listSessionRequests,
   acceptSessionRequest,
   rejectSessionRequest,
   cancelSessionRequest,
   getMySessionQrImageUrl,
+  getMyWeChatCodePng,
   connectWebSocket,
   closeWebSocket,
   addWebSocketHandler,

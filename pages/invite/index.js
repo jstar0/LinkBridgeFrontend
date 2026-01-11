@@ -23,7 +23,7 @@ Page({
   onLoad(options) {
     const code = parseCode(options);
     if (!code) {
-      this.setData({ errorMessage: '无效二维码' });
+      this.setData({ errorMessage: '无效微信码' });
       return;
     }
 
@@ -77,7 +77,7 @@ Page({
       .catch((err) => {
         const code = err?.code || '';
         let msg = err?.message || '建立会话失败';
-        if (code === 'SESSION_INVITE_INVALID') msg = '二维码已失效，请让对方重新生成二维码';
+        if (code === 'SESSION_INVITE_INVALID') msg = '微信码已失效，请让对方重新生成微信码';
         if (code === 'TOKEN_INVALID' || code === 'TOKEN_EXPIRED') msg = '请先登录';
         this.setData({ loading: false, errorMessage: msg });
       });

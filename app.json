@@ -48,6 +48,11 @@
       "root": "pages/peer",
       "name": "peer",
       "pages": ["index"]
+    },
+    {
+      "root": "pages/localfeed",
+      "name": "localfeed",
+      "pages": ["profile/index"]
     }
   ],
   "window": {
@@ -65,7 +70,7 @@
       },
       {
         "pagePath": "pages/nearby/index",
-        "text": "附近"
+        "text": "本地"
       },
       {
         "pagePath": "pages/my/index",

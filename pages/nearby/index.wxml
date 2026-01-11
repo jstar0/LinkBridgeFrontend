@@ -1,33 +1,101 @@
 <t-toast id="t-toast" />
 
 <view class="nearby">
-  <nav title-text="附近" />
+  <nav title-text="本地信息流" />
 
-  <map
-    class="nearby__map"
-    latitude="{{center.lat}}"
-    longitude="{{center.lng}}"
-    markers="{{markers}}"
-    show-location
-    enable-scroll
-    enable-zoom
-    bindmarkertap="onMarkerTap"
-  />
-
-  <view class="nearby__hud">
-    <view class="hud-card">
-      <view class="hud-card__row">
-        <view class="hud-card__title">1.1km 附近动态</view>
-        <view class="hud-card__sub">{{locationStatus}}</view>
+  <view class="lf-tabs">
+    <view class="lf-tabs__items">
+      <view class="lf-tabs__item {{viewMode === 'map' ? 'is-active' : ''}}" data-mode="map" bindtap="onSwitchMode">
+        地图
       </view>
-      <view class="hud-card__actions">
-        <t-button size="small" variant="outline" theme="default" bind:tap="onRefresh">刷新</t-button>
-        <t-button size="small" variant="outline" theme="default" bind:tap="onOpenRequests">
-          请求 {{pendingRequests.length}}
-        </t-button>
-        <t-button size="small" theme="primary" bind:tap="onOpenPublish">发布</t-button>
+      <view
+        class="lf-tabs__item {{viewMode === 'publish' ? 'is-active' : ''}}"
+        data-mode="publish"
+        bindtap="onSwitchMode"
+      >
+        发布
+      </view>
+      <view class="lf-tabs__indicator" style="left: {{modeIndicatorLeft}}; width: {{modeIndicatorWidth}};">
+        <view class="lf-tabs__bar" />
       </view>
     </view>
+  </view>
+
+  <view class="lf-body">
+    <view wx:if="{{viewMode === 'map'}}" class="map-wrap">
+      <map
+        id="lfMap"
+        class="nearby__map"
+        latitude="{{center.lat}}"
+        longitude="{{center.lng}}"
+        markers="{{markers}}"
+        show-location
+        enable-scroll
+        enable-zoom
+        bindmarkertap="onMarkerTap"
+        bindregionchange="onRegionChange"
+      />
+
+      <view class="nearby__hud">
+        <view class="hud-card">
+          <view class="hud-card__row">
+            <view class="hud-card__title">本地信息流</view>
+            <view class="hud-card__sub">{{locationStatus}}</view>
+          </view>
+          <view class="hud-card__actions">
+            <t-button size="small" variant="outline" theme="default" bind:tap="onRefresh">刷新</t-button>
+            <t-button size="small" variant="outline" theme="default" bind:tap="onOpenRequests">
+              请求 {{pendingRequests.length}}
+            </t-button>
+            <t-button size="small" theme="primary" bind:tap="onOpenPublish">发布</t-button>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <scroll-view wx:else class="publish-view" scroll-y enhanced>
+      <view class="publish-page">
+        <view class="publish-card">
+          <view class="publish-card__title">我的 Home Base Address</view>
+          <view class="publish-card__sub" wx:if="{{homeBase}}">
+            已设置：{{homeBase.name || '我的位置'}}（{{homeBase.latText}}, {{homeBase.lngText}}）
+          </view>
+          <view class="publish-card__sub" wx:else>未设置。首次使用本地信息流需设置一个固定地址点位。</view>
+
+          <view class="publish-card__actions">
+            <t-button size="small" variant="outline" theme="default" bind:tap="onSetHomeBaseToCurrent" disabled="{{!isLoggedIn}}">
+              用当前位置
+            </t-button>
+            <t-button size="small" variant="outline" theme="default" bind:tap="onChooseHomeBase" disabled="{{!isLoggedIn}}">
+              地图选点
+            </t-button>
+          </view>
+          <view wx:if="{{!isLoggedIn}}" class="hint">请先登录后设置地址</view>
+        </view>
+
+        <view class="publish-card" style="margin-top: 20rpx;">
+          <view class="publish-card__row">
+            <view class="publish-card__title">我的发布</view>
+            <t-button size="small" theme="primary" bind:tap="onOpenPublish" disabled="{{!isLoggedIn}}">发布</t-button>
+          </view>
+
+          <view wx:if="{{!isLoggedIn}}" class="empty">请先登录后查看与发布内容</view>
+          <view wx:elif="{{!myPosts.length}}" class="empty">暂无发布</view>
+
+          <view wx:else class="my-posts">
+            <view wx:for="{{myPosts}}" wx:key="id" class="my-post">
+              <view class="my-post__head">
+                <view class="my-post__title">{{item.text || '（图片）'}}</view>
+                <view wx:if="{{item.pinned}}" class="my-post__pin">置顶</view>
+              </view>
+              <view class="my-post__meta">
+                半径 {{item.radiusKm}}km · 有效至 {{item.expiresAtText}}
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
   </view>
 
   <t-popup visible="{{detailVisible}}" placement="bottom" overlay bind:visible-change="onDetailVisibleChange">
@@ -41,7 +109,7 @@
         <view class="post__head">
           <t-avatar image="{{selectedPost.author.avatarUrl || '/static/chat/avatar.png'}}" size="small" />
           <view class="post__meta">
-            <view class="post__name">{{selectedPost.author.displayName || '附近的人'}}</view>
+            <view class="post__name">{{selectedPost.author.displayName || '本地的人'}}</view>
             <view class="post__time">{{selectedPost.createdAtText}} · 有效至 {{selectedPost.expiresAtText}}</view>
           </view>
         </view>
@@ -59,17 +127,17 @@
         </view>
 
         <view class="sheet__actions">
-          <t-button theme="default" variant="outline" block bind:tap="onCloseDetail">关闭</t-button>
+          <t-button theme="default" variant="outline" block bind:tap="onViewProfile">查看信息源</t-button>
           <t-button
             theme="primary"
             block
             style="margin-top: 16rpx;"
-            disabled="{{!selectedPost.inviteCode}}"
-            bind:tap="onApplyConnect"
+            disabled="{{connectButtonDisabled}}"
+            bind:tap="onTapConnect"
           >
-            申请建立连接
+            {{connectButtonText}}
           </t-button>
-          <view wx:if="{{!selectedPost.inviteCode}}" class="hint">此动态暂未提供连接入口（需后端支持）</view>
+          <view wx:if="{{connectButtonHint}}" class="hint">{{connectButtonHint}}</view>
         </view>
       </view>
     </view>
@@ -91,7 +159,7 @@
           wx:for="{{pendingRequests}}"
           wx:key="id"
           title="{{item.user.displayName || '对方'}}"
-          description="申请建立会话"
+          description="{{item.request.verificationMessage || '申请建立会话'}}"
           image="{{item.user.avatarUrl || '/static/chat/avatar.png'}}"
         >
           <view slot="right-icon" class="req-actions">
@@ -132,15 +200,32 @@
         />
 
         <view class="publish__row">
-          <view class="publish__label">有效期（小时）</view>
+          <view class="publish__label">有效期（天）</view>
           <input
             class="publish__input"
             type="number"
-            value="{{draft.ttlHours}}"
-            placeholder="例如 24"
-            bindinput="onTtlHoursInput"
+            value="{{draft.ttlDays}}"
+            placeholder="例如 30"
+            bindinput="onTtlDaysInput"
             disabled="{{!isLoggedIn}}"
           />
+        </view>
+
+        <view class="publish__row">
+          <view class="publish__label">可见半径（km）</view>
+          <input
+            class="publish__input"
+            type="number"
+            value="{{draft.radiusKm}}"
+            placeholder="例如 1"
+            bindinput="onRadiusKmInput"
+            disabled="{{!isLoggedIn}}"
+          />
+        </view>
+
+        <view class="publish__row">
+          <view class="publish__label">置顶</view>
+          <switch checked="{{draft.pinned}}" bindchange="onPinnedChange" disabled="{{!isLoggedIn}}" />
         </view>
 
         <view wx:if="{{draft.images && draft.images.length}}" class="images">
@@ -160,4 +245,28 @@
       </view>
     </view>
   </t-popup>
+
+  <t-popup visible="{{verificationVisible}}" placement="bottom" overlay bind:visible-change="onVerificationVisibleChange">
+    <view class="sheet">
+      <view class="sheet__header">
+        <view class="sheet__title">验证消息</view>
+        <t-icon name="close" size="48rpx" bind:tap="onCloseVerification" />
+      </view>
+      <view class="publish">
+        <textarea
+          class="publish__textarea"
+          placeholder="写一句话，帮助对方判断要不要同意…"
+          value="{{verificationText}}"
+          maxlength="120"
+          bindinput="onVerificationInput"
+        />
+        <view class="publish__actions">
+          <t-button theme="default" variant="outline" bind:tap="onCloseVerification">取消</t-button>
+          <t-button theme="primary" bind:tap="onSendConnectRequest">发送请求</t-button>
+        </view>
+      </view>
+    </view>
+  </t-popup>
 </view>
+
+<scan-fab />

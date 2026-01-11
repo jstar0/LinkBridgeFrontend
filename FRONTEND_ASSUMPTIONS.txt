@@ -1,0 +1,23 @@
+前端假设 / 待确认点（如无则写“无”）
+=================================
+
+1) Local Feed（本地信息流）后端接口尚未完全对齐时，前端先用本地存储跑通流程：
+   - 发布数据：使用本地 `storage`（key: `lb_nearby_posts_mock_v1`）mock。
+   - Home Base Address：使用本地 `storage`（key: `lb_localfeed_home_base_v1_<userId>`）mock。
+
+2) 地图展示：
+   - 需求要求 “Pin=用户 Home Base Address 的头像点位”；目前前端先用 “发布内容的坐标” 作为地图点位（后端提供 Pin 列表接口后再切换为头像 Pin）。
+
+3) 地图关系请求（Map Relationship Request）接口约定（需后端实现）：
+   - `POST /v1/session-requests`
+   - body: `{ addresseeId, source: 'localfeed', verificationMessage? }`
+   - 目标：复用现有 “session request / accept” 模型；对方同意后才创建/显示会话。
+
+4) 反滥用错误码（需后端确认/实现；前端按 code 体现按钮态）：
+   - `LOCALFEED_REQUEST_DAILY_LIMIT`：每日最多 10 个新请求（0 点重置）
+   - `LOCALFEED_REQUEST_COOLDOWN`：被拒绝后 3 天冷却
+   - 若后端使用其它 code，前端暂以 `err.message` 兜底提示。
+
+5) Home Base Address “每天最多修改 1 次”的限制：
+   - 默认由后端进行校验并返回错误码/提示文案；前端当前未在本地强制限制（仅提供 UI 入口）。
+

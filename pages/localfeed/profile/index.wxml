@@ -1,0 +1,26 @@
+<view class="lf-profile">
+  <nav title-text="信息源" />
+
+  <view class="lf-profile__header">
+    <t-avatar image="{{avatarUrl || '/static/chat/avatar.png'}}" size="large" />
+    <view class="lf-profile__meta">
+      <view class="lf-profile__name">{{name || '用户'}}</view>
+      <view class="lf-profile__sub">仅展示本地信息流相关内容</view>
+    </view>
+  </view>
+
+  <view class="lf-profile__content">
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{!posts.length}}" class="empty">暂无发布</view>
+    <view wx:else class="posts">
+      <view wx:for="{{posts}}" wx:key="id" class="post">
+        <view class="post__head">
+          <view class="post__title">{{item.text || '（图片）'}}</view>
+          <t-tag wx:if="{{item.pinned}}" class="post__tag" variant="light">置顶</t-tag>
+        </view>
+        <view class="post__meta">半径 {{item.radiusKm}}km · 有效至 {{item.expiresAtText}}</view>
+      </view>
+    </view>
+  </view>
+</view>
+

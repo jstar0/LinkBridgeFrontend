@@ -22,7 +22,7 @@
       />
     </view>
 
-    <view class="login__tips">仅支持通过二维码建立临时会话；不提供用户搜索或长期关系</view>
+    <view class="login__tips">仅支持通过微信码建立临时会话；不提供用户搜索或长期关系</view>
 
     <view class="login__error" wx:if="{{errorMessage}}">{{errorMessage}}</view>
 

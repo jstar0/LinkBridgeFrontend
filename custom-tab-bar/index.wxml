@@ -8,7 +8,7 @@
     </view>
     <view class="lb-tabbar__tab {{ value === 'nearby' ? 'is-active' : '' }}" data-value="nearby" bindtap="onTap">
       <view class="lb-tabbar__tab-inner">
-        <text class="lb-tabbar__label">附近</text>
+        <text class="lb-tabbar__label">本地</text>
       </view>
     </view>
     <view class="lb-tabbar__tab {{ value === 'my' ? 'is-active' : '' }}" data-value="my" bindtap="onTap">

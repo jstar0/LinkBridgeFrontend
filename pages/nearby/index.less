@@ -1,8 +1,68 @@
 .nearby {
   height: 100vh;
-  position: relative;
+  display: flex;
+  flex-direction: column;
   background: #f3f3f3;
   --td-navbar-bg-color: #f3f3f3;
+}
+
+.lf-tabs {
+  padding: 0 24rpx;
+  background: #f3f3f3;
+}
+
+.lf-tabs__items {
+  position: relative;
+  height: 84rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.06);
+}
+
+.lf-tabs__item {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.lf-tabs__item.is-active {
+  color: rgba(0, 0, 0, 0.88);
+  font-weight: 600;
+}
+
+.lf-tabs__indicator {
+  position: absolute;
+  left: 0;
+  bottom: 8rpx;
+  display: flex;
+  justify-content: center;
+  transition: left 220ms ease, width 220ms ease;
+}
+
+.lf-tabs__bar {
+  width: 44rpx;
+  height: 6rpx;
+  border-radius: 999rpx;
+  background: rgba(0, 82, 217, 0.95);
+}
+
+.lf-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.map-wrap {
+  height: 100%;
+  position: relative;
 }
 
 .nearby__map {
@@ -14,7 +74,7 @@
   position: absolute;
   left: 24rpx;
   right: 24rpx;
-  top: calc(env(safe-area-inset-top) + 108rpx);
+  top: 24rpx;
 }
 
 .hud-card {
@@ -51,6 +111,90 @@
   justify-content: flex-end;
   gap: 12rpx;
   margin-top: 12rpx;
+}
+
+.publish-view {
+  height: 100%;
+  background: #f3f3f3;
+}
+
+.publish-page {
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.publish-card {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 16rpx;
+  padding: 16rpx;
+  box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.06);
+}
+
+.publish-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.publish-card__title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.9);
+}
+
+.publish-card__sub {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.publish-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.my-posts {
+  margin-top: 12rpx;
+}
+
+.my-post {
+  padding: 14rpx 0;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
+}
+
+.my-post__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.my-post__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 28rpx;
+  color: rgba(0, 0, 0, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.my-post__pin {
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: rgba(0, 82, 217, 0.95);
+  background: rgba(0, 82, 217, 0.08);
+  flex-shrink: 0;
+}
+
+.my-post__meta {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: rgba(0, 0, 0, 0.45);
 }
 
 .sheet {
@@ -214,4 +358,3 @@
   right: 6rpx;
   top: 6rpx;
 }
-

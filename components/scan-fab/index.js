@@ -69,46 +69,35 @@ Component({
         return Promise.resolve();
       }
 
-      const token = api.getToken();
-      if (!token) {
-        this.setData({ qrImagePath: '' });
-        return Promise.resolve();
-      }
-
-      return new Promise((resolve, reject) => {
-        wx.request({
-          url: `${api.getBaseUrl()}/v1/wechat/qrcode/session`,
-          method: 'GET',
-          header: { Authorization: `Bearer ${token}` },
-          responseType: 'arraybuffer',
-          success: (res) => {
-            if (res.statusCode !== 200) {
-              reject(new Error(`HTTP ${res.statusCode}`));
-              return;
-            }
-            const fs = wx.getFileSystemManager();
-            const filePath = `${wx.env.USER_DATA_PATH}/lb_session_qr.png`;
+      return api
+        .getMyWeChatCodePng()
+        .then((buf) => {
+          const fs = wx.getFileSystemManager();
+          const filePath = `${wx.env.USER_DATA_PATH}/lb_session_wechat_code.png`;
+          return new Promise((resolve, reject) => {
             fs.writeFile({
               filePath,
-              data: res.data,
+              data: buf,
               encoding: 'binary',
-              success: () => {
-                this.setData({ qrImagePath: filePath });
-                resolve();
-              },
+              success: () => resolve(filePath),
               fail: (err) => reject(err),
             });
-          },
-          fail: (err) => reject(err),
+          });
+        })
+        .then((filePath) => {
+          this.setData({ qrImagePath: filePath });
+        })
+        .catch((err) => {
+          const msg = err?.message || err?.errMsg || '加载失败';
+          throw new Error(msg);
         });
-      });
     },
 
     onOpen() {
       this.refresh();
       this.setData({ popupVisible: true });
       this.loadQrImage().catch(() => {
-        wx.showToast({ title: '二维码加载失败', icon: 'none' });
+        wx.showToast({ title: '微信码加载失败', icon: 'none' });
       });
     },
 

@@ -18,7 +18,7 @@ Component({
         isSidebar: true,
       },
       {
-        title: '附近',
+        title: '本地',
         url: 'pages/nearby/index',
         isSidebar: true,
       },

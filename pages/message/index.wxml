@@ -13,7 +13,7 @@
       wx:key="id"
       t-class-image="avatar"
       title="{{ item.user.displayName }}"
-      description="请求建立会话"
+      description="{{item.request.verificationMessage || '请求建立会话'}}"
     >
       <view slot="right-icon" class="requests__actions">
         <t-button size="small" theme="primary" variant="base" bind:tap="onAcceptRequest" data-id="{{ item.id }}"
