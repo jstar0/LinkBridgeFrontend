@@ -3,8 +3,7 @@
     "pages/message/index",
     "pages/nearby/index",
     "pages/my/index",
-    "pages/my/info-edit/index",
-    "pages/my/profile-publish/index"
+    "pages/my/info-edit/index"
   ],
   "usingComponents": {
     "t-toast": "tdesign-miniprogram/toast/toast"

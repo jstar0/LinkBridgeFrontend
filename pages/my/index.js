@@ -9,7 +9,6 @@ Page({
     isLoad: false,
     personalInfo: {},
     settingList: [
-      { name: '个人主页', icon: 'user-circle', type: 'profile', url: '/pages/my/profile-publish/index' },
       { name: '联系客服', icon: 'service', type: 'service' },
       { name: '设置', icon: 'setting', type: 'setting', url: '' },
       { name: '退出登录', icon: 'logout', type: 'logout', url: '' },
