@@ -35,7 +35,7 @@
       wx:for-item="item"
       wx:key="type"
       title="{{item.name}}"
-      url="{{item.url}}"
+      url="{{item.url || ''}}"
       leftIcon="{{item.icon}}"
       hover
       arrow
