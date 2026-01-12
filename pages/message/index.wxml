@@ -109,7 +109,10 @@
 
 <!-- dragging overlay -->
 <view wx:if="{{ dragging }}" class="lb-drag-overlay">
-  <view class="lb-drag-zone lb-drag-zone--top {{ dragTargetType === 'archive' ? 'lb-drag-zone--active' : '' }}">
+  <view
+    class="lb-drag-zone lb-drag-zone--top {{ dragTargetType === 'archive' ? 'lb-drag-zone--active' : '' }}"
+    style="top: {{dragTopZoneTopPx}}px;"
+  >
     拖到这里结束会话
   </view>
   <view class="lb-drag-zone lb-drag-zone--bottom {{ dragTargetType === 'create' ? 'lb-drag-zone--active' : '' }}">

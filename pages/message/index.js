@@ -160,6 +160,7 @@ Page({
     dragTargetType: 'none', // none | group | archive | create
     dragTargetKey: '',
     dragWindowHeight: 0,
+    dragTopZoneTopPx: 0,
     dragTopZonePx: DRAG_TOP_ZONE_PX,
     dragBottomZonePx: DRAG_BOTTOM_ZONE_PX,
   },
@@ -490,9 +491,22 @@ Page({
     if (!sid) return;
 
     let windowHeight = 0;
+    let topZoneTopPx = 0;
     try {
       const info = wx.getSystemInfoSync();
       windowHeight = Number(info?.windowHeight || 0) || 0;
+      const statusBarHeight = Number(info?.statusBarHeight || 0) || 0;
+
+      // Put the top drop zone below the custom navbar, otherwise it can be hidden by the status bar/notch.
+      let navBottomPx = 0;
+      try {
+        const menu = wx.getMenuButtonBoundingClientRect();
+        navBottomPx = Number(menu?.bottom || 0) || 0;
+      } catch (e) {
+        // ignore
+      }
+      if (!navBottomPx) navBottomPx = statusBarHeight + 44;
+      topZoneTopPx = Math.max(8, navBottomPx + 8);
     } catch (e) {
       // ignore
     }
@@ -508,16 +522,24 @@ Page({
       dragTargetType: 'none',
       dragTargetKey: '',
       dragWindowHeight: windowHeight,
+      dragTopZoneTopPx: topZoneTopPx,
     });
 
-    this.measureGroupHeaders();
+    this.measureDragTargets();
   },
 
-  measureGroupHeaders() {
+  measureDragTargets() {
     const q = wx.createSelectorQuery().in(this);
     q.selectAll('.lb-group__header').fields({ rect: true, dataset: true }, (rects) => {
       this._dragHeaderRects = Array.isArray(rects) ? rects : [];
-    }).exec();
+    });
+    q.select('.lb-drag-zone--top').boundingClientRect((rect) => {
+      this._dragTopZoneRect = rect || null;
+    });
+    q.select('.lb-drag-zone--bottom').boundingClientRect((rect) => {
+      this._dragBottomZoneRect = rect || null;
+    });
+    q.exec();
   },
 
   onSessionTouchMove(event) {
@@ -545,9 +567,19 @@ Page({
     let key = '';
     let hoverKey = '';
 
-    if (y <= topZone) {
+    const topRect = this._dragTopZoneRect;
+    const bottomRect = this._dragBottomZoneRect;
+
+    const hitRect = (rect) => {
+      if (!rect) return false;
+      const t = Number(rect?.top);
+      const b = Number(rect?.bottom);
+      return Number.isFinite(t) && Number.isFinite(b) && y >= t && y <= b;
+    };
+
+    if (hitRect(topRect) || y <= topZone) {
       type = 'archive';
-    } else if (winH && y >= winH - bottomZone) {
+    } else if (hitRect(bottomRect) || (winH && y >= winH - bottomZone)) {
       type = 'create';
     } else {
       const rects = Array.isArray(this._dragHeaderRects) ? this._dragHeaderRects : [];
@@ -590,7 +622,7 @@ Page({
         this.setData({ collapsedGroupKeys: next });
         this.saveCollapsedGroups(next);
         this.setSessions(this.data.sessions);
-        this.measureGroupHeaders();
+        this.measureDragTargets();
       }
     }
 
@@ -611,7 +643,7 @@ Page({
     this.setData({ collapsedGroupKeys: next });
     this.saveCollapsedGroups(next);
     this.setSessions(this.data.sessions);
-    this.measureGroupHeaders();
+    this.measureDragTargets();
   },
 
   onSessionTouchEnd(event) {
@@ -711,6 +743,8 @@ Page({
 
     this._dragHoverGroupKey = '';
     this._dragHeaderRects = null;
+    this._dragTopZoneRect = null;
+    this._dragBottomZoneRect = null;
     this._dragAutoExpanded = null;
     this._dragOriginalCollapsedKeys = null;
 
