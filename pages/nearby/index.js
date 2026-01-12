@@ -787,10 +787,15 @@ Page({
     if (!userId) return;
     const name = selected?.displayName || '';
     const avatarUrl = selected?.avatarUrl || '';
+    const center = this.data.center || {};
+    const atLat = Number(center.lat);
+    const atLng = Number(center.lng);
     const url =
       `/pages/localfeed/profile/index?userId=${encodeURIComponent(userId)}` +
       (name ? `&name=${encodeURIComponent(name)}` : '') +
-      (avatarUrl ? `&avatarUrl=${encodeURIComponent(avatarUrl)}` : '');
+      (avatarUrl ? `&avatarUrl=${encodeURIComponent(avatarUrl)}` : '') +
+      (Number.isFinite(atLat) ? `&atLat=${encodeURIComponent(atLat)}` : '') +
+      (Number.isFinite(atLng) ? `&atLng=${encodeURIComponent(atLng)}` : '');
     wx.navigateTo({ url });
   },
 

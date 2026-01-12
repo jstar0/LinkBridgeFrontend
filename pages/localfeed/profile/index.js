@@ -86,16 +86,32 @@ Page({
     name: '',
     avatarUrl: '',
     posts: [],
+    viewerLat: null,
+    viewerLng: null,
   },
 
   onLoad(options) {
     const userId = String(options?.userId || '').trim();
     const name = String(options?.name || '').trim();
     const avatarUrl = String(options?.avatarUrl || '').trim();
-    this.setData({ userId, name, avatarUrl });
+    const atLat = Number(options?.atLat);
+    const atLng = Number(options?.atLng);
+    this.setData({
+      userId,
+      name,
+      avatarUrl,
+      viewerLat: Number.isFinite(atLat) ? atLat : null,
+      viewerLng: Number.isFinite(atLng) ? atLng : null,
+    });
   },
 
   onShow() {
+    const la = Number(this.data.viewerLat);
+    const ln = Number(this.data.viewerLng);
+    if (Number.isFinite(la) && Number.isFinite(ln)) {
+      this.refresh();
+      return;
+    }
     this.ensureViewerLocation().finally(() => this.refresh());
   },
 
@@ -117,8 +133,13 @@ Page({
   },
 
   refresh() {
-    const uid = this.data.userId;
-    const viewer = loadViewerLoc();
+    const uid = String(this.data.userId || '').trim();
+    if (!uid) return;
+
+    const explicitLat = Number(this.data.viewerLat);
+    const explicitLng = Number(this.data.viewerLng);
+    const viewer =
+      Number.isFinite(explicitLat) && Number.isFinite(explicitLng) ? { lat: explicitLat, lng: explicitLng } : loadViewerLoc();
     this.setData({ loading: true });
 
     api
