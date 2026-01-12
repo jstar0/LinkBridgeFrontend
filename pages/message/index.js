@@ -558,7 +558,7 @@ Page({
       });
       if (hit && hit?.dataset?.key) {
         hoverKey = String(hit.dataset.key);
-        if (hoverKey.startsWith('group:')) {
+        if (hoverKey.startsWith('group:') || hoverKey.startsWith('auto:')) {
           type = 'group';
           key = hoverKey;
         }
@@ -650,7 +650,33 @@ Page({
 
     if (type === 'group') {
       const gid = parseGroupIdFromKey(key);
-      if (!gid) return; // auto groups are not assignable
+
+      // Dropping onto an auto group means "remove from custom group" (back to default grouping by source).
+      if (!gid && key.startsWith('auto:')) {
+        const inCustom = !!String(session?.relationship?.groupId || '').trim();
+        if (!inCustom) {
+          wx.showToast({ title: '已在默认分组', icon: 'none' });
+          return;
+        }
+
+        wx.showLoading({ title: '移动中...' });
+        api
+          .updateSessionRelationship(session.id, { groupId: null })
+          .then(() => {
+            wx.hideLoading();
+            wx.showToast({ title: '已移出分组', icon: 'none' });
+            this.getMessageList();
+            this.loadRelationshipGroups();
+          })
+          .catch((err) => {
+            wx.hideLoading();
+            wx.showToast({ title: err?.message || '移动失败', icon: 'none' });
+          });
+        return;
+      }
+
+      if (!gid) return;
+
       wx.showLoading({ title: '移动中...' });
       api
         .updateSessionRelationship(session.id, { groupId: gid })
