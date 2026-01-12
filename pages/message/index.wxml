@@ -33,27 +33,109 @@
     </t-cell>
   </view>
 
+  <!-- AI assistant (pinned) -->
   <t-cell
-    wx:for="{{ sessions }}"
-    wx:key="id"
+    wx:if="{{ aiSession }}"
     t-class-image="avatar"
     t-class-center="lb-session-cell__center"
     t-class-description="content"
-    image="{{ item.avatar }}"
-    title="{{ item.peer.displayName }}"
-    description="{{ item.desc }}"
+    image="{{ aiSession.avatar }}"
+    title="{{ aiSession.peer.displayName }}"
+    description="{{ aiSession.desc }}"
     hover
     bind:click="toChat"
-    bind:longpress="onLongPressSession"
-    data-session="{{ item }}"
-  >
-    <view wx:if="{{ item.unreadCount > 0 }}" slot="right-icon" class="lb-unread-badge">
-      {{ item.unreadCount > 99 ? '99+' : item.unreadCount }}
+    data-session="{{ aiSession }}"
+  />
+
+  <!-- grouped sessions -->
+  <view wx:for="{{ sessionGroups }}" wx:key="key" wx:for-item="group" class="lb-group">
+    <view class="lb-group__header" bind:tap="onToggleGroup" data-key="{{ group.key }}">
+      <t-icon name="{{ group.collapsed ? 'chevron-right' : 'chevron-down' }}" size="36rpx" color="#00000066" />
+      <view class="lb-group__title">{{ group.title }}</view>
+      <view class="lb-group__meta">{{ group.count }}</view>
     </view>
-  </t-cell>
+
+    <view wx:if="{{ !group.collapsed }}">
+      <t-cell
+        wx:for="{{ group.sessions }}"
+        wx:key="id"
+        wx:for-item="session"
+        t-class-image="avatar"
+        t-class-center="lb-session-cell__center"
+        t-class-description="content"
+        image="{{ session.avatar }}"
+        title="{{ session.peer.displayName }}"
+        description="{{ session.desc }}"
+        hover
+        bind:click="toChat"
+        bind:longpress="onLongPressSession"
+        data-session="{{ session }}"
+      >
+        <view wx:if="{{ session.unreadCount > 0 }}" slot="right-icon" class="lb-unread-badge">
+          {{ session.unreadCount > 99 ? '99+' : session.unreadCount }}
+        </view>
+      </t-cell>
+    </view>
+  </view>
 
   <!-- keep content above the custom bottom tab bar -->
   <view class="lb-tabbar-spacer" />
 </t-pull-down-refresh>
 
 <scan-fab />
+
+<!-- group picker -->
+<t-popup
+  visible="{{ groupPickerVisible }}"
+  placement="bottom"
+  overlay
+  bind:visible-change="onGroupPickerVisibleChange"
+>
+  <view class="lb-popup">
+    <view class="lb-popup__header">
+      <view class="lb-popup__title">选择分组</view>
+      <t-icon name="close" size="44rpx" bind:tap="onCloseGroupPicker" />
+    </view>
+
+    <t-cell title="创建新分组" hover bind:click="onTapCreateGroupFromPicker" />
+    <t-cell title="移出分组" hover bind:click="onClearGroup" />
+
+    <view class="lb-popup__divider" />
+
+    <t-cell
+      wx:for="{{ relationshipGroups }}"
+      wx:key="id"
+      wx:for-item="relGroup"
+      title="{{ relGroup.name }}"
+      hover
+      bind:click="onPickGroup"
+      data-id="{{ relGroup.id }}"
+    />
+
+    <view class="lb-popup__footer-spacer" />
+  </view>
+</t-popup>
+
+<!-- create group -->
+<t-popup
+  visible="{{ createGroupVisible }}"
+  placement="bottom"
+  overlay
+  bind:visible-change="onCreateGroupVisibleChange"
+>
+  <view class="lb-popup">
+    <view class="lb-popup__header">
+      <view class="lb-popup__title">创建分组</view>
+      <t-icon name="close" size="44rpx" bind:tap="onCloseCreateGroup" />
+    </view>
+
+    <view class="lb-form">
+      <t-input label="分组名" placeholder="例如：工作 / 校友 / 临时" value="{{ newGroupName }}" bind:change="onNewGroupNameChange" clearable />
+      <view class="lb-form__actions">
+        <t-button theme="primary" variant="base" block bind:tap="onCreateGroupConfirm">创建并移动</t-button>
+      </view>
+    </view>
+
+    <view class="lb-popup__footer-spacer" />
+  </view>
+</t-popup>

@@ -588,6 +588,81 @@ function cancelSessionRequest(requestId) {
   return request('POST', `/v1/session-requests/${encodeURIComponent(requestId)}/cancel`).then((res) => res);
 }
 
+/**
+ * Relationship Groups (session grouping).
+ *
+ * GET /v1/relationship-groups
+ * Response: { groups: { id: string, name: string, createdAtMs: number, updatedAtMs: number }[] }
+ */
+function listRelationshipGroups() {
+  return request('GET', '/v1/relationship-groups').then((res) => res.groups || []);
+}
+
+/**
+ * POST /v1/relationship-groups
+ * Body: { name: string }
+ * Response: { group: { id: string, name: string, createdAtMs: number, updatedAtMs: number } }
+ */
+function createRelationshipGroup(name) {
+  const n = String(name || '').trim();
+  if (!n) return Promise.reject({ code: 'VALIDATION', message: 'name is required' });
+  return request('POST', '/v1/relationship-groups', { name: n.slice(0, 24) }).then((res) => res.group);
+}
+
+/**
+ * POST /v1/relationship-groups/:id/rename
+ * Body: { name: string }
+ * Response: { group: { id: string, name: string, createdAtMs: number, updatedAtMs: number } }
+ */
+function renameRelationshipGroup(groupId, name) {
+  const id = String(groupId || '').trim();
+  const n = String(name || '').trim();
+  if (!id) return Promise.reject({ code: 'VALIDATION', message: 'groupId is required' });
+  if (!n) return Promise.reject({ code: 'VALIDATION', message: 'name is required' });
+  return request('POST', `/v1/relationship-groups/${encodeURIComponent(id)}/rename`, { name: n.slice(0, 24) }).then(
+    (res) => res.group
+  );
+}
+
+/**
+ * POST /v1/relationship-groups/:id/delete
+ * Response: { deleted: true }
+ */
+function deleteRelationshipGroup(groupId) {
+  const id = String(groupId || '').trim();
+  if (!id) return Promise.reject({ code: 'VALIDATION', message: 'groupId is required' });
+  return request('POST', `/v1/relationship-groups/${encodeURIComponent(id)}/delete`).then((res) => res);
+}
+
+/**
+ * Update a session's relationship metadata (grouping/tags/notes).
+ *
+ * PUT /v1/sessions/:id/relationship
+ * Body (partial patch allowed by backend):
+ * - groupId?: string | null
+ * - note?: string
+ * - tags?: string[]
+ *
+ * Response: { relationship: { groupId?: string, groupName?: string, note?: string, tags?: string[], updatedAtMs: number } }
+ */
+function updateSessionRelationship(sessionId, patch = {}) {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return Promise.reject({ code: 'VALIDATION', message: 'sessionId is required' });
+
+  const p = patch || {};
+  const payload = {};
+  if (Object.prototype.hasOwnProperty.call(p, 'groupId')) {
+    const gid = p.groupId;
+    payload.groupId = gid === null || gid === undefined ? null : String(gid || '').trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(p, 'note')) payload.note = String(p.note || '').trim().slice(0, 120);
+  if (Object.prototype.hasOwnProperty.call(p, 'tags')) {
+    payload.tags = Array.isArray(p.tags) ? p.tags.map((t) => String(t || '').trim()).filter(Boolean).slice(0, 10) : [];
+  }
+
+  return request('PUT', `/v1/sessions/${encodeURIComponent(sid)}/relationship`, payload).then((res) => res.relationship || res);
+}
+
 function getMySessionQrImageUrl(cacheBuster = Date.now()) {
   const token = getToken();
   if (!token) return '';
@@ -749,6 +824,11 @@ module.exports = {
   acceptSessionRequest,
   rejectSessionRequest,
   cancelSessionRequest,
+  listRelationshipGroups,
+  createRelationshipGroup,
+  renameRelationshipGroup,
+  deleteRelationshipGroup,
+  updateSessionRelationship,
   getMySessionQrImageUrl,
   getMyWeChatCodePng,
   connectWebSocket,

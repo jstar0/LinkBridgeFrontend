@@ -1,6 +1,8 @@
 const api = require('../../utils/linkbridge/api');
 const app = getApp();
 
+const COLLAPSED_GROUPS_KEY = 'lb_message_group_collapsed_v1';
+
 function getSessionIdFromMessageEnv(env) {
   const msg = env?.payload?.message;
   return (
@@ -14,13 +16,85 @@ function getSessionIdFromMessageEnv(env) {
   );
 }
 
+function normalizeSessionSource(source) {
+  const v = String(source || '').trim().toLowerCase();
+  if (!v) return 'manual';
+  if (v === 'wechat_code' || v === 'wechatcode' || v === 'wechat_qrcode' || v === 'wechat_qr') return 'wechat_code';
+  if (v === 'map' || v === 'localfeed' || v === 'local_feed') return 'map';
+  if (v === 'activity' || v === 'event') return 'activity';
+  if (v === 'manual' || v === 'unknown' || v === 'other') return 'manual';
+  return 'manual';
+}
+
+function getAutoGroupTitle(source) {
+  const s = normalizeSessionSource(source);
+  if (s === 'wechat_code') return '来自微信码';
+  if (s === 'map') return '来自地图';
+  if (s === 'activity') return '来自活动';
+  return '其他会话';
+}
+
+function buildSessionGroups(sessions, collapsedKeys = [], groupNameById = {}) {
+  const list = Array.isArray(sessions) ? sessions : [];
+  const collapsed = new Set(Array.isArray(collapsedKeys) ? collapsedKeys : []);
+
+  const groupsMap = new Map();
+
+  for (const s of list) {
+    if (!s || !s.id) continue;
+    if (s.isAI) continue;
+
+    const rel = s.relationship || {};
+    const groupId = rel.groupId ? String(rel.groupId).trim() : '';
+
+    let key = '';
+    let title = '';
+    if (groupId) {
+      key = `group:${groupId}`;
+      title = String(rel.groupName || groupNameById?.[groupId] || '分组');
+    } else {
+      const src = normalizeSessionSource(s.source || rel.source);
+      key = `auto:${src}`;
+      title = getAutoGroupTitle(src);
+    }
+
+    if (!groupsMap.has(key)) {
+      groupsMap.set(key, {
+        key,
+        title,
+        collapsed: collapsed.has(key),
+        sessions: [],
+        latestUpdatedAtMs: Number(s.updatedAtMs || 0) || 0,
+      });
+    }
+
+    groupsMap.get(key).sessions.push(s);
+  }
+
+  const groups = Array.from(groupsMap.values());
+  groups.sort((a, b) => (Number(b.latestUpdatedAtMs || 0) || 0) - (Number(a.latestUpdatedAtMs || 0) || 0));
+  groups.forEach((g) => {
+    g.count = Array.isArray(g.sessions) ? g.sessions.length : 0;
+  });
+
+  return groups;
+}
+
 Page({
   /** 页面的初始数据 */
   data: {
     sessions: [],
+    aiSession: null,
+    sessionGroups: [],
     loading: true, // 是否正在加载（用于拉取列表）
     refreshing: false, // t-pull-down-refresh state
     incomingRequests: [],
+    collapsedGroupKeys: [],
+    relationshipGroups: [],
+    groupPickerVisible: false,
+    createGroupVisible: false,
+    groupActionSession: null,
+    newGroupName: '',
   },
 
   /** 生命周期函数--监听页面加载 */
@@ -39,6 +113,8 @@ Page({
       return;
     }
 
+    this.loadCollapsedGroups();
+
     api.connectWebSocket();
     this.getMessageList();
     this.getIncomingRequests();
@@ -55,7 +131,7 @@ Page({
           desc: session && session.lastMessageText ? session.lastMessageText : ' ',
         };
         const next = [decorated, ...this.data.sessions.filter((s) => s.id !== session.id)];
-        this.setData({ sessions: next });
+        this.setSessions(next);
         return;
       }
 
@@ -63,7 +139,7 @@ Page({
         const archivedId = env?.payload?.session?.id || env?.payload?.sessionId || '';
         if (!archivedId) return;
         const next = this.data.sessions.filter((s) => s.id !== archivedId);
-        if (next.length !== this.data.sessions.length) this.setData({ sessions: next });
+        if (next.length !== this.data.sessions.length) this.setSessions(next);
         return;
       }
 
@@ -118,7 +194,7 @@ Page({
 
         next.splice(idx, 1);
         next.unshift(session);
-        this.setData({ sessions: next });
+        this.setSessions(next);
       }
     };
 
@@ -195,12 +271,60 @@ Page({
           isAI: true,
         };
 
-        this.setData({ sessions: [aiSession, ...decorated], loading: false });
+        this.setSessions([aiSession, ...decorated]);
+        this.setData({ loading: false });
       })
       .catch(() => {
         this.setData({ loading: false });
         wx.showToast({ title: '加载失败', icon: 'none' });
       });
+  },
+
+  setSessions(nextSessions) {
+    const sessions = Array.isArray(nextSessions) ? nextSessions : [];
+    const aiSession = sessions.find((s) => !!s?.isAI) || null;
+    const groupNameById = {};
+    (this.data.relationshipGroups || []).forEach((g) => {
+      if (g && g.id) groupNameById[String(g.id)] = String(g.name || '');
+    });
+
+    const sessionGroups = buildSessionGroups(sessions, this.data.collapsedGroupKeys, groupNameById);
+    this.setData({ sessions, aiSession, sessionGroups });
+  },
+
+  loadCollapsedGroups() {
+    try {
+      const raw = wx.getStorageSync(COLLAPSED_GROUPS_KEY);
+      const keys = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
+      if (Array.isArray(keys)) this.setData({ collapsedGroupKeys: keys });
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  saveCollapsedGroups(keys) {
+    try {
+      wx.setStorageSync(COLLAPSED_GROUPS_KEY, JSON.stringify(keys || []));
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  onToggleGroup(event) {
+    const key = event?.currentTarget?.dataset?.key || '';
+    if (!key) return;
+
+    const prev = Array.isArray(this.data.collapsedGroupKeys) ? this.data.collapsedGroupKeys : [];
+    const set = new Set(prev);
+    if (set.has(key)) set.delete(key);
+    else set.add(key);
+
+    const next = Array.from(set);
+    this.setData({ collapsedGroupKeys: next });
+    this.saveCollapsedGroups(next);
+
+    // Rebuild groups with new collapsed state.
+    this.setSessions(this.data.sessions);
   },
 
   onRefresh() {
@@ -255,7 +379,7 @@ Page({
 
     // Reset unread count locally when opening.
     const sessions = this.data.sessions.map((s) => (s.id === session.id ? { ...s, unreadCount: 0 } : s));
-    this.setData({ sessions });
+    this.setSessions(sessions);
 
     // Clear global per-session unread so tab bar dot updates correctly.
     if (typeof app?.setSessionUnread === 'function') app.setSessionUnread(session.id, 0);
@@ -273,26 +397,184 @@ Page({
     const session = event?.currentTarget?.dataset?.session;
     if (!session?.id) return;
 
-    wx.showActionSheet({
-      itemList: ['结束会话'],
-      success: (res) => {
-        if (res?.tapIndex !== 0) return;
+    if (session.isAI) return;
 
-        wx.showLoading({ title: '结束中...' });
-        api
-          .archiveSession(session.id)
-          .then(() => {
-            const next = this.data.sessions.filter((s) => s.id !== session.id);
-            this.setData({ sessions: next });
-            wx.hideLoading();
-            wx.showToast({ title: '已结束', icon: 'none' });
-          })
-          .catch(() => {
-            wx.hideLoading();
-            wx.showToast({ title: '结束失败', icon: 'none' });
-          });
+    const hasGroup = !!(session?.relationship?.groupId && String(session.relationship.groupId).trim());
+    const items = hasGroup ? ['移动到分组', '创建分组并移动', '从分组移除', '结束会话'] : ['移动到分组', '创建分组并移动', '结束会话'];
+
+    wx.showActionSheet({
+      itemList: items,
+      success: (res) => {
+        const idx = Number(res?.tapIndex);
+        if (!Number.isFinite(idx) || idx < 0) return;
+
+        if (idx === 0) {
+          this.openGroupPicker(session);
+          return;
+        }
+        if (idx === 1) {
+          this.openCreateGroup(session);
+          return;
+        }
+        if (hasGroup && idx === 2) {
+          wx.showLoading({ title: '处理中...' });
+          api
+            .updateSessionRelationship(session.id, { groupId: null })
+            .then(() => {
+              wx.hideLoading();
+              wx.showToast({ title: '已移出分组', icon: 'none' });
+              this.getMessageList();
+            })
+            .catch((err) => {
+              wx.hideLoading();
+              wx.showToast({ title: err?.message || '失败', icon: 'none' });
+            });
+          return;
+        }
+
+        // "结束会话"
+        if ((!hasGroup && idx === 2) || (hasGroup && idx === 3)) this.archiveSession(session);
       },
     });
+  },
+
+  archiveSession(session) {
+    wx.showLoading({ title: '结束中...' });
+    api
+      .archiveSession(session.id)
+      .then(() => {
+        const next = this.data.sessions.filter((s) => s.id !== session.id);
+        this.setSessions(next);
+        wx.hideLoading();
+        wx.showToast({ title: '已结束', icon: 'none' });
+      })
+      .catch(() => {
+        wx.hideLoading();
+        wx.showToast({ title: '结束失败', icon: 'none' });
+      });
+  },
+
+  openGroupPicker(session) {
+    this.setData({ groupActionSession: session, groupPickerVisible: true });
+    this.loadRelationshipGroups();
+  },
+
+  openCreateGroup(session) {
+    this.setData({ groupActionSession: session, createGroupVisible: true, newGroupName: '' });
+  },
+
+  onGroupPickerVisibleChange(e) {
+    const visible = !!e?.detail?.visible;
+    this.setData({ groupPickerVisible: visible });
+  },
+
+  onCloseGroupPicker() {
+    this.setData({ groupPickerVisible: false });
+  },
+
+  onCreateGroupVisibleChange(e) {
+    const visible = !!e?.detail?.visible;
+    this.setData({ createGroupVisible: visible });
+  },
+
+  onCloseCreateGroup() {
+    this.setData({ createGroupVisible: false });
+  },
+
+  loadRelationshipGroups() {
+    return api
+      .listRelationshipGroups()
+      .then((groups) => {
+        this.setData({ relationshipGroups: Array.isArray(groups) ? groups : [] });
+        // Refresh groups' title mapping (only affects manual group title fallback).
+        this.setSessions(this.data.sessions);
+      })
+      .catch(() => {
+        this.setData({ relationshipGroups: [] });
+      });
+  },
+
+  onPickGroup(event) {
+    const groupId = event?.currentTarget?.dataset?.id;
+    const session = this.data.groupActionSession;
+    if (!session?.id) return;
+
+    const gid = String(groupId || '').trim();
+    if (!gid) return;
+
+    wx.showLoading({ title: '处理中...' });
+    api
+      .updateSessionRelationship(session.id, { groupId: gid })
+      .then(() => {
+        wx.hideLoading();
+        wx.showToast({ title: '已移动', icon: 'none' });
+        this.setData({ groupPickerVisible: false, groupActionSession: null });
+        this.getMessageList();
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        wx.showToast({ title: err?.message || '失败', icon: 'none' });
+      });
+  },
+
+  onTapCreateGroupFromPicker() {
+    const session = this.data.groupActionSession;
+    if (!session?.id) return;
+    this.setData({ groupPickerVisible: false });
+    this.openCreateGroup(session);
+  },
+
+  onClearGroup() {
+    const session = this.data.groupActionSession;
+    if (!session?.id) return;
+
+    wx.showLoading({ title: '处理中...' });
+    api
+      .updateSessionRelationship(session.id, { groupId: null })
+      .then(() => {
+        wx.hideLoading();
+        wx.showToast({ title: '已移出分组', icon: 'none' });
+        this.setData({ groupPickerVisible: false, groupActionSession: null });
+        this.getMessageList();
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        wx.showToast({ title: err?.message || '失败', icon: 'none' });
+      });
+  },
+
+  onNewGroupNameChange(e) {
+    const v = e?.detail?.value;
+    this.setData({ newGroupName: typeof v === 'string' ? v : String(v || '') });
+  },
+
+  onCreateGroupConfirm() {
+    const name = String(this.data.newGroupName || '').trim();
+    const session = this.data.groupActionSession;
+    if (!session?.id) return;
+    if (!name) {
+      wx.showToast({ title: '请输入分组名', icon: 'none' });
+      return;
+    }
+
+    wx.showLoading({ title: '创建中...' });
+    api
+      .createRelationshipGroup(name)
+      .then((group) => {
+        const gid = String(group?.id || '').trim();
+        if (!gid) throw new Error('missing group id');
+        return api.updateSessionRelationship(session.id, { groupId: gid });
+      })
+      .then(() => {
+        wx.hideLoading();
+        wx.showToast({ title: '已创建并移动', icon: 'none' });
+        this.setData({ createGroupVisible: false, groupPickerVisible: false, groupActionSession: null, newGroupName: '' });
+        this.getMessageList();
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        wx.showToast({ title: err?.message || '失败', icon: 'none' });
+      });
   },
 
   onAcceptRequest(event) {
