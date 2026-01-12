@@ -64,6 +64,15 @@ function formatRemaining(ms) {
   return `${minutes}分钟`;
 }
 
+function safeHideLoading() {
+  try {
+    const p = wx.hideLoading();
+    if (p && typeof p.catch === 'function') p.catch(() => null);
+  } catch (e) {
+    // ignore
+  }
+}
+
 function toFullUrl(url) {
   const u = String(url || '').trim();
   if (!u) return '';
@@ -865,14 +874,14 @@ Page({
     api
       .createLocalFeedRelationshipRequest(peerId, msg)
       .then((res) => {
-        wx.hideLoading();
+        safeHideLoading();
         const requestId = res?.request?.id || '';
         this.setRelationshipStatus(peerId, { state: 'pending', requestId });
         this.setData({ verificationVisible: false });
         wx.showToast({ title: '已发送请求', icon: 'none' });
       })
       .catch((err) => {
-        wx.hideLoading();
+        safeHideLoading();
         const code = err?.code || '';
         // Backend should enforce rate-limit/cooldown; here we only surface and reflect state if possible.
         if (code === 'SESSION_REQUEST_EXISTS') {
@@ -1072,7 +1081,7 @@ Page({
     api
       .acceptSessionRequest(requestId)
       .then((res) => {
-        wx.hideLoading();
+        safeHideLoading();
         const sessionId = res?.session?.id || '';
         const peerUserId = res?.request?.requesterId || '';
         this.loadRequests();
@@ -1094,7 +1103,7 @@ Page({
         return null;
       })
       .catch((err) => {
-        wx.hideLoading();
+        safeHideLoading();
         wx.showToast({ title: err?.message || '失败', icon: 'none' });
       });
   },
@@ -1107,12 +1116,12 @@ Page({
     api
       .rejectSessionRequest(requestId)
       .then(() => {
-        wx.hideLoading();
+        safeHideLoading();
         wx.showToast({ title: '已拒绝', icon: 'none' });
         this.loadRequests();
       })
       .catch((err) => {
-        wx.hideLoading();
+        safeHideLoading();
         wx.showToast({ title: err?.message || '失败', icon: 'none' });
       });
   },
@@ -1267,7 +1276,7 @@ Page({
         });
       })
       .then(() => {
-        wx.hideLoading();
+        safeHideLoading();
         this.setData({
           publishVisible: false,
           draft: { text: '', images: [], ttlDays: '30', radiusKm: '1', pinned: false },
@@ -1276,7 +1285,7 @@ Page({
         return this.refreshMyPosts();
       })
       .catch((err) => {
-        wx.hideLoading();
+        safeHideLoading();
         wx.showToast({ title: err?.message || '发布失败', icon: 'none' });
       });
   },
@@ -1291,7 +1300,7 @@ Page({
     this.ensureLocation()
       .then((loc) => {
         if (!loc) {
-          wx.hideLoading();
+          safeHideLoading();
           wx.showModal({
             title: '需要定位权限',
             content: '请允许获取定位后再使用“用当前位置设置”。你也可以选择“地图选点”。',
@@ -1299,11 +1308,42 @@ Page({
             cancelText: '取消',
             success: (res) => {
               if (!res?.confirm) return;
-              if (typeof wx?.openSetting !== 'function') {
-                wx.showToast({ title: '当前环境不支持打开设置', icon: 'none' });
+
+              const openSetting = () => {
+                if (typeof wx?.openSetting !== 'function') {
+                  wx.showToast({ title: '当前环境不支持打开设置', icon: 'none' });
+                  return;
+                }
+                wx.openSetting({});
+              };
+
+              // If the permission hasn't been requested before, `openSetting` may not show it.
+              if (typeof wx?.getSetting !== 'function' || typeof wx?.authorize !== 'function') {
+                openSetting();
                 return;
               }
-              wx.openSetting({});
+
+              wx.getSetting({
+                success: (s) => {
+                  const auth = s?.authSetting || {};
+                  const locSetting = auth['scope.userLocation'];
+                  if (locSetting === true) {
+                    this.onSetHomeBaseToCurrent();
+                    return;
+                  }
+                  if (locSetting === false) {
+                    openSetting();
+                    return;
+                  }
+                  // locSetting is undefined -> request it once so it appears in settings.
+                  wx.authorize({
+                    scope: 'scope.userLocation',
+                    success: () => this.onSetHomeBaseToCurrent(),
+                    fail: () => openSetting(),
+                  });
+                },
+                fail: () => openSetting(),
+              });
             },
           });
           return null;
@@ -1324,7 +1364,7 @@ Page({
         }
         wx.showToast({ title: err?.message || '设置失败', icon: 'none' });
       })
-      .finally(() => wx.hideLoading());
+      .finally(() => safeHideLoading());
   },
 
   onChooseHomeBase() {
@@ -1337,7 +1377,8 @@ Page({
       return;
     }
 
-    wx.chooseLocation({
+    const choose = () =>
+      wx.chooseLocation({
       success: (res) => {
         const lat = Number(res?.latitude);
         const lng = Number(res?.longitude);
@@ -1363,13 +1404,54 @@ Page({
             }
             wx.showToast({ title: err?.message || '保存失败', icon: 'none' });
           })
-          .finally(() => wx.hideLoading());
+          .finally(() => safeHideLoading());
       },
       fail: (err) => {
         const msg = String(err?.errMsg || '').toLowerCase();
         if (msg.includes('cancel')) return;
         wx.showToast({ title: '选点失败', icon: 'none' });
       },
+    });
+
+    // Best-effort: ensure location permission is requested so `chooseLocation` works reliably.
+    if (typeof wx?.getSetting !== 'function' || typeof wx?.authorize !== 'function') {
+      choose();
+      return;
+    }
+
+    wx.getSetting({
+      success: (s) => {
+        const auth = s?.authSetting || {};
+        const locSetting = auth['scope.userLocation'];
+        if (locSetting === true) {
+          choose();
+          return;
+        }
+        if (locSetting === false) {
+          wx.showModal({
+            title: '需要定位权限',
+            content: '请先在设置中允许定位权限后再使用地图选点。',
+            confirmText: '去设置',
+            cancelText: '取消',
+            success: (r) => {
+              if (!r?.confirm) return;
+              if (typeof wx?.openSetting !== 'function') {
+                wx.showToast({ title: '当前环境不支持打开设置', icon: 'none' });
+                return;
+              }
+              wx.openSetting({});
+            },
+          });
+          return;
+        }
+        // undefined -> request once then retry
+        wx.authorize({
+          scope: 'scope.userLocation',
+          success: () => choose(),
+          fail: () => choose(),
+        });
+      },
+      fail: () => choose(),
     });
   },
 });

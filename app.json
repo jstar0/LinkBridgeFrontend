@@ -8,6 +8,12 @@
   "usingComponents": {
     "t-toast": "tdesign-miniprogram/toast/toast"
   },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于设置我的位置并在本地信息流中展示附近点位"
+    }
+  },
+  "requiredPrivateInfos": ["getLocation", "chooseLocation"],
   "subpackages": [
     {
       "root": "pages/chat",
