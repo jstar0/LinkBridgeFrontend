@@ -2,6 +2,7 @@
 
 <t-pull-down-refresh
   value="{{ refreshing }}"
+  disabled="{{ dragging }}"
   using-custom-navbar="{{ true }}"
   loadingTexts="{{['...', '松手刷新', '正在刷新', '刷新完成']}}"
   bind:refresh="onRefresh"
@@ -49,32 +50,54 @@
 
   <!-- grouped sessions -->
   <view wx:for="{{ sessionGroups }}" wx:key="key" wx:for-item="group" class="lb-group">
-    <view class="lb-group__header" bind:tap="onToggleGroup" data-key="{{ group.key }}">
+    <view
+      class="lb-group__header {{ dragTargetType === 'group' && dragTargetKey === group.key && group.isCustom ? 'lb-group__header--target' : '' }}"
+      bind:tap="onToggleGroup"
+      data-key="{{ group.key }}"
+    >
       <t-icon name="{{ group.collapsed ? 'chevron-right' : 'chevron-down' }}" size="36rpx" color="#00000066" />
       <view class="lb-group__title">{{ group.title }}</view>
       <view class="lb-group__meta">{{ group.count }}</view>
+      <t-icon
+        wx:if="{{ group.isCustom }}"
+        name="more"
+        size="40rpx"
+        color="#00000066"
+        catchtap="onTapGroupMenu"
+        data-key="{{ group.key }}"
+        data-title="{{ group.title }}"
+      />
     </view>
 
     <view wx:if="{{ !group.collapsed }}">
-      <t-cell
+      <view
         wx:for="{{ group.sessions }}"
         wx:key="id"
         wx:for-item="session"
-        t-class-image="avatar"
-        t-class-center="lb-session-cell__center"
-        t-class-description="content"
-        image="{{ session.avatar }}"
-        title="{{ session.peer.displayName }}"
-        description="{{ session.desc }}"
-        hover
-        bind:click="toChat"
-        bind:longpress="onLongPressSession"
+        class="lb-session-wrap {{ draggingSessionId === session.id ? 'lb-session-wrap--dragging' : '' }}"
         data-session="{{ session }}"
+        data-id="{{ session.id }}"
+        bind:longpress="onLongPressSession"
+        catchtouchmove="onSessionTouchMove"
+        catchtouchend="onSessionTouchEnd"
+        catchtouchcancel="onSessionTouchCancel"
       >
-        <view wx:if="{{ session.unreadCount > 0 }}" slot="right-icon" class="lb-unread-badge">
-          {{ session.unreadCount > 99 ? '99+' : session.unreadCount }}
-        </view>
-      </t-cell>
+        <t-cell
+          t-class-image="avatar"
+          t-class-center="lb-session-cell__center"
+          t-class-description="content"
+          image="{{ session.avatar }}"
+          title="{{ session.peer.displayName }}"
+          description="{{ session.desc }}"
+          hover
+          bind:click="toChat"
+          data-session="{{ session }}"
+        >
+          <view wx:if="{{ session.unreadCount > 0 }}" slot="right-icon" class="lb-unread-badge">
+            {{ session.unreadCount > 99 ? '99+' : session.unreadCount }}
+          </view>
+        </t-cell>
+      </view>
     </view>
   </view>
 
@@ -84,55 +107,51 @@
 
 <scan-fab />
 
-<!-- group picker -->
-<t-popup
-  visible="{{ groupPickerVisible }}"
-  placement="bottom"
-  overlay
-  bind:visible-change="onGroupPickerVisibleChange"
->
+<!-- dragging overlay -->
+<view wx:if="{{ dragging }}" class="lb-drag-overlay">
+  <view class="lb-drag-zone lb-drag-zone--top {{ dragTargetType === 'archive' ? 'lb-drag-zone--active' : '' }}">
+    拖到这里结束会话
+  </view>
+  <view class="lb-drag-zone lb-drag-zone--bottom {{ dragTargetType === 'create' ? 'lb-drag-zone--active' : '' }}">
+    拖到这里新建分组
+  </view>
+
+  <view class="lb-drag-ghost" style="top: {{dragGhostTopPx}}px;">
+    <image class="lb-drag-ghost__avatar" mode="aspectFill" src="{{ draggingSession.avatar || '/static/chat/avatar.png' }}" />
+    <view class="lb-drag-ghost__content">
+      <view class="lb-drag-ghost__title">{{ draggingSession.peer.displayName }}</view>
+      <view class="lb-drag-ghost__desc">{{ draggingSession.desc }}</view>
+    </view>
+  </view>
+</view>
+
+<!-- group menu -->
+<t-popup visible="{{ groupMenuVisible }}" placement="bottom" overlay bind:visible-change="onGroupMenuVisibleChange">
   <view class="lb-popup">
     <view class="lb-popup__header">
-      <view class="lb-popup__title">选择分组</view>
-      <t-icon name="close" size="44rpx" bind:tap="onCloseGroupPicker" />
+      <view class="lb-popup__title">{{ groupMenuTitle || '分组' }}</view>
+      <t-icon name="close" size="44rpx" bind:tap="onCloseGroupMenu" />
     </view>
 
-    <t-cell title="创建新分组" hover bind:click="onTapCreateGroupFromPicker" />
-    <t-cell title="移出分组" hover bind:click="onClearGroup" />
-
-    <view class="lb-popup__divider" />
-
-    <t-cell
-      wx:for="{{ relationshipGroups }}"
-      wx:key="id"
-      wx:for-item="relGroup"
-      title="{{ relGroup.name }}"
-      hover
-      bind:click="onPickGroup"
-      data-id="{{ relGroup.id }}"
-    />
+    <t-cell title="重命名分组" hover bind:click="onOpenGroupRename" />
+    <t-cell title="删除分组" hover bind:click="onDeleteGroup" />
 
     <view class="lb-popup__footer-spacer" />
   </view>
 </t-popup>
 
-<!-- create group -->
-<t-popup
-  visible="{{ createGroupVisible }}"
-  placement="bottom"
-  overlay
-  bind:visible-change="onCreateGroupVisibleChange"
->
+<!-- rename group -->
+<t-popup visible="{{ groupRenameVisible }}" placement="bottom" overlay bind:visible-change="onGroupRenameVisibleChange">
   <view class="lb-popup">
     <view class="lb-popup__header">
-      <view class="lb-popup__title">创建分组</view>
-      <t-icon name="close" size="44rpx" bind:tap="onCloseCreateGroup" />
+      <view class="lb-popup__title">重命名分组</view>
+      <t-icon name="close" size="44rpx" bind:tap="onCloseGroupRename" />
     </view>
 
     <view class="lb-form">
-      <t-input label="分组名" placeholder="例如：工作 / 校友 / 临时" value="{{ newGroupName }}" bind:change="onNewGroupNameChange" clearable />
+      <t-input label="名称" placeholder="请输入分组名" value="{{ groupRenameName }}" bind:change="onGroupRenameNameChange" clearable />
       <view class="lb-form__actions">
-        <t-button theme="primary" variant="base" block bind:tap="onCreateGroupConfirm">创建并移动</t-button>
+        <t-button theme="primary" variant="base" block bind:tap="onGroupRenameConfirm">确认</t-button>
       </view>
     </view>
 
