@@ -183,6 +183,28 @@ function buildPinsFromPosts(posts, myHomeBase, myUserId) {
   return pins;
 }
 
+function normalizePinsFromServer(pins) {
+  const list = Array.isArray(pins) ? pins : [];
+  return list
+    .map((p) => {
+      const userId = String(p?.userId || '').trim();
+      const lat = Number(p?.lat);
+      const lng = Number(p?.lng);
+      if (!userId || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return {
+        userId,
+        displayName: String(p?.displayName || '本地的人'),
+        avatarUrl: String(p?.avatarUrl || ''),
+        lat,
+        lng,
+        postsCount: 0,
+        topText: '',
+        previewPosts: [],
+      };
+    })
+    .filter(Boolean);
+}
+
 function clusterPins(pins, scale) {
   const s = Number(scale);
   if (!Number.isFinite(s) || s >= 14) return (pins || []).map((p) => ({ type: 'pin', pin: p }));
@@ -390,6 +412,40 @@ Page({
     connectButtonHint: '',
   },
 
+  getPinsQueryParams() {
+    const center = this.data.center || {};
+    const centerLat = Number(center.lat);
+    const centerLng = Number(center.lng);
+
+    let minLat;
+    let maxLat;
+    let minLng;
+    let maxLng;
+
+    const region = this.data.mapRegion;
+    const sw = region?.southwest;
+    const ne = region?.northeast;
+    if (sw && ne) {
+      minLat = Number(sw.latitude);
+      minLng = Number(sw.longitude);
+      maxLat = Number(ne.latitude);
+      maxLng = Number(ne.longitude);
+    }
+
+    if (![minLat, minLng, maxLat, maxLng, centerLat, centerLng].every(Number.isFinite)) {
+      const s = clampNum(this.data.mapScale || 14, 5, 18);
+      const factor = Math.pow(2, 14 - s);
+      const latSpan = clampNum(0.06 * factor, 0.008, 0.6);
+      const lngSpan = clampNum(latSpan / (Math.cos((centerLat * Math.PI) / 180) || 1), 0.008, 0.6);
+      minLat = centerLat - latSpan;
+      maxLat = centerLat + latSpan;
+      minLng = centerLng - lngSpan;
+      maxLng = centerLng + lngSpan;
+    }
+
+    return { minLat, maxLat, minLng, maxLng, centerLat, centerLng, limit: 200 };
+  },
+
   scheduleRefreshFeed() {
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => {
@@ -535,76 +591,24 @@ Page({
   },
 
   refreshFeed() {
-    const now = Date.now();
-    const me = api.getUser() || {};
-    const center = this.data.center;
-
-    const raw = loadPosts();
-    // Seed a few mock posts on first run (no server yet).
-    let posts = Array.isArray(raw) ? raw : [];
-    if (!posts.length) {
-      const seed = [
-        {
-          id: `seed_${now}_1`,
-          author: { userId: 'u_seed_1', displayName: '本地的人', avatarUrl: '/static/chat/avatar.png' },
-          text: '今天想找人一起语音聊聊～',
-          images: [],
-          lat: center.lat + 0.002,
-          lng: center.lng + 0.002,
-          createdAtMs: now - 15 * 60 * 1000,
-          expiresAtMs: now + 6 * 3600 * 1000,
-          radiusKm: 1,
-          pinned: false,
-        },
-        {
-          id: `seed_${now}_2`,
-          author: { userId: 'u_seed_2', displayName: '路过', avatarUrl: '/static/chat/avatar.png' },
-          text: '有推荐的播客/书吗？',
-          images: [],
-          lat: center.lat - 0.0015,
-          lng: center.lng + 0.0012,
-          createdAtMs: now - 45 * 60 * 1000,
-          expiresAtMs: now + 24 * 3600 * 1000,
-          radiusKm: 1,
-          pinned: false,
-        },
-      ];
-      posts = seed;
-      savePosts(posts);
+    if (!api.isLoggedIn()) {
+      this.setData({ pins: [], markers: [], markerMeta: {} });
+      return;
     }
 
-    const visible = filterVisiblePosts(posts, center.lat, center.lng, now);
-    const myPosts = visible.filter((p) => (p?.author?.userId || '') && me?.id && p.author.userId === me.id);
-
-    const myUserId = String(me?.id || '').trim();
-    const pins = buildPinsFromPosts(visible, this.data.homeBase, myUserId);
-
-    // Ensure the current user appears on the map once Home Base is set,
-    // even if they haven't published any posts yet (mock-friendly behavior).
-    if (myUserId && this.data.homeBase && !pins.some((p) => p.userId === myUserId)) {
-      pins.unshift({
-        userId: myUserId,
-        displayName: me?.displayName || me?.username || '我',
-        avatarUrl: me?.avatarUrl || '/static/chat/avatar.png',
-        lat: Number(this.data.homeBase.lat),
-        lng: Number(this.data.homeBase.lng),
-        postsCount: 0,
-        topText: '',
-        previewPosts: [],
+    const q = this.getPinsQueryParams();
+    api
+      .listLocalFeedPins(q)
+      .then((pins) => {
+        const normalized = normalizePinsFromServer(pins);
+        const pinsInView = limitMarkers(normalized, this.data.mapRegion, 300);
+        const clustered = clusterPins(pinsInView, this.data.mapScale);
+        const { markers, markerMeta } = toMarkersFromItems(clustered, 150);
+        this.setData({ pins: normalized, markers, markerMeta });
+      })
+      .catch(() => {
+        // Keep old markers to avoid flicker; if it's the first load, it stays empty.
       });
-    }
-
-    const pinsInView = limitMarkers(pins, this.data.mapRegion, 300);
-    const clustered = clusterPins(pinsInView, this.data.mapScale);
-    const { markers, markerMeta } = toMarkersFromItems(clustered, 150);
-
-    this.setData({
-      posts: visible,
-      pins,
-      markers,
-      markerMeta,
-      myPosts,
-    });
   },
 
   refreshHomeBaseFromServer() {
@@ -645,6 +649,27 @@ Page({
           .filter((p) => p && p.id)
           .slice(0, 50);
         this.setData({ myPosts: normalized });
+      })
+      .catch(() => null);
+  },
+
+  refreshSelectedUserPosts(userId) {
+    const uid = String(userId || '').trim();
+    if (!uid) return;
+    if (!api.isLoggedIn()) return;
+
+    const center = this.data.center || {};
+    const atLat = Number(center.lat);
+    const atLng = Number(center.lng);
+    api
+      .listLocalFeedUserPosts(uid, atLat, atLng)
+      .then((posts) => {
+        const me = api.getUser() || {};
+        const normalized = (posts || [])
+          .map((p) => normalizeServerLocalFeedPostItem(p, me))
+          .filter((p) => p && p.id)
+          .slice(0, 3);
+        this.setData({ selectedUserPosts: normalized });
       })
       .catch(() => null);
   },
@@ -695,12 +720,13 @@ Page({
     this.setData(
       {
         selectedUser: { userId: pin.userId, displayName: pin.displayName, avatarUrl: pin.avatarUrl },
-        selectedUserPosts: pin.previewPosts || [],
+        selectedUserPosts: [],
         detailVisible: true,
       },
       () => {
         this.refreshConnectUi();
         this.refreshRelationshipStatusForUser(userId);
+        this.refreshSelectedUserPosts(userId);
       }
     );
   },

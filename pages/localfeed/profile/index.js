@@ -1,5 +1,6 @@
-const POSTS_KEY = 'lb_nearby_posts_mock_v1';
 const VIEWER_LOC_KEY = 'lb_localfeed_viewer_loc_v1';
+
+const api = require('../../../utils/linkbridge/api');
 
 function safeParseJSON(raw, fallback) {
   if (!raw) return fallback;
@@ -32,10 +33,29 @@ function decoratePost(p) {
   };
 }
 
-function loadPosts() {
-  const raw = wx.getStorageSync(POSTS_KEY);
-  const list = safeParseJSON(raw, []);
-  return Array.isArray(list) ? list : [];
+function toFullUrl(url) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return u;
+  return `${api.getBaseUrl()}${u.startsWith('/') ? '' : '/'}${u}`;
+}
+
+function normalizeServerPostItem(post) {
+  const p = post || {};
+  const radiusM = Number(p.radiusM);
+  const radiusKm = Number.isFinite(radiusM) ? Math.max(0.1, radiusM / 1000) : 1;
+  const images = Array.isArray(p.images) ? p.images : [];
+  const urls = images.map((img) => toFullUrl(img?.url)).filter(Boolean);
+
+  return decoratePost({
+    id: String(p.id || ''),
+    text: typeof p.text === 'string' ? p.text : '',
+    images: urls,
+    radiusKm,
+    pinned: !!p.isPinned,
+    createdAtMs: Number(p.createdAtMs || 0) || Date.now(),
+    expiresAtMs: Number(p.expiresAtMs || 0) || Date.now() + 30 * 24 * 3600 * 1000,
+  });
 }
 
 function loadViewerLoc() {
@@ -103,29 +123,19 @@ Page({
 
   refresh() {
     const uid = this.data.userId;
-    const now = Date.now();
     const viewer = loadViewerLoc();
+    this.setData({ loading: true });
 
-    const posts = loadPosts()
-      .filter((p) => (p?.author?.userId || '') === uid)
-      .filter((p) => (Number(p?.expiresAtMs || 0) || 0) > now)
-      .filter((p) => {
-        // Enforce publisher-defined radius (best-effort on frontend mock).
-        const r = Number(p?.radiusKm ?? 1) || 1;
-        const lat = Number(p?.lat);
-        const lng = Number(p?.lng);
-        if (![lat, lng, r].every(Number.isFinite)) return true;
-        if (!viewer) return true;
-        return distanceKm(viewer.lat, viewer.lng, lat, lng) <= r;
+    api
+      .listLocalFeedUserPosts(uid, viewer?.lat, viewer?.lng)
+      .then((posts) => {
+        const normalized = (posts || [])
+          .map((p) => normalizeServerPostItem(p))
+          .filter((p) => p && p.id)
+          .slice(0, 30);
+        this.setData({ posts: normalized, loading: false });
       })
-      .map(decoratePost)
-      .sort((a, b) => {
-        if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-        return (b.createdAtMs || 0) - (a.createdAtMs || 0);
-      })
-      .slice(0, 30);
-
-    this.setData({ posts, loading: false });
+      .catch(() => this.setData({ posts: [], loading: false }));
   },
 
   onPreviewImage(e) {
