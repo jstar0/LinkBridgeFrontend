@@ -49,7 +49,13 @@
   />
 
   <!-- grouped sessions -->
-  <view wx:for="{{ sessionGroups }}" wx:key="key" wx:for-item="group" class="lb-group">
+  <view
+    wx:for="{{ sessionGroups }}"
+    wx:key="key"
+    wx:for-item="group"
+    wx:if="{{ group.isCustom || group.count > 0 || dragging }}"
+    class="lb-group"
+  >
     <view
       class="lb-group__header {{ dragTargetType === 'group' && dragTargetKey === group.key ? (group.isCustom ? 'lb-group__header--target' : 'lb-group__header--target-auto') : '' }}"
       bind:tap="onToggleGroup"

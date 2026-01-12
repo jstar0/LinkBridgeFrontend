@@ -42,6 +42,7 @@ function buildSessionGroups(sessions, collapsedKeys = [], relationshipGroups = [
   const collapsed = new Set(Array.isArray(collapsedKeys) ? collapsedKeys : []);
 
   const groupsMap = new Map();
+  const autoSources = ['wechat_code', 'map', 'activity', 'manual'];
 
   // Seed user-defined groups (can be empty; still rendered as drop targets & manageable).
   const relGroups = Array.isArray(relationshipGroups) ? relationshipGroups : [];
@@ -54,6 +55,20 @@ function buildSessionGroups(sessions, collapsedKeys = [], relationshipGroups = [
       key,
       title: String(g?.name || '分组'),
       isCustom: true,
+      collapsed: collapsed.has(key),
+      sessions: [],
+      latestUpdatedAtMs: 0,
+    });
+  });
+
+  // Seed default auto groups in fixed order (only shown when has sessions, or when dragging).
+  autoSources.forEach((src) => {
+    const key = `auto:${src}`;
+    if (groupsMap.has(key)) return;
+    groupsMap.set(key, {
+      key,
+      title: getAutoGroupTitle(src),
+      isCustom: false,
       collapsed: collapsed.has(key),
       sessions: [],
       latestUpdatedAtMs: 0,
@@ -95,18 +110,41 @@ function buildSessionGroups(sessions, collapsedKeys = [], relationshipGroups = [
     if (ts > (Number(g.latestUpdatedAtMs || 0) || 0)) g.latestUpdatedAtMs = ts;
   }
 
-  const groups = Array.from(groupsMap.values());
-  groups.sort((a, b) => {
-    const ac = a.isCustom ? 1 : 0;
-    const bc = b.isCustom ? 1 : 0;
-    if (ac !== bc) return bc - ac;
-    return (Number(b.latestUpdatedAtMs || 0) || 0) - (Number(a.latestUpdatedAtMs || 0) || 0);
+  const ordered = [];
+  const seen = new Set();
+
+  // 1) Custom groups: fixed order from backend list.
+  relGroups.forEach((g) => {
+    const id = String(g?.id || '').trim();
+    if (!id) return;
+    const key = `group:${id}`;
+    const group = groupsMap.get(key);
+    if (!group || seen.has(key)) return;
+    ordered.push(group);
+    seen.add(key);
   });
-  groups.forEach((g) => {
+
+  // 2) Auto groups: fixed order.
+  autoSources.forEach((src) => {
+    const key = `auto:${src}`;
+    const group = groupsMap.get(key);
+    if (!group || seen.has(key)) return;
+    ordered.push(group);
+    seen.add(key);
+  });
+
+  // 3) Any leftover groups (future-proofing), stable by insertion order.
+  Array.from(groupsMap.keys()).forEach((key) => {
+    if (seen.has(key)) return;
+    const group = groupsMap.get(key);
+    if (group) ordered.push(group);
+  });
+
+  ordered.forEach((g) => {
     g.count = Array.isArray(g.sessions) ? g.sessions.length : 0;
   });
 
-  return groups;
+  return ordered;
 }
 
 function parseGroupIdFromKey(key) {
@@ -525,7 +563,7 @@ Page({
       dragTopZoneTopPx: topZoneTopPx,
     });
 
-    this.measureDragTargets();
+    wx.nextTick(() => this.measureDragTargets());
   },
 
   measureDragTargets() {
@@ -622,7 +660,7 @@ Page({
         this.setData({ collapsedGroupKeys: next });
         this.saveCollapsedGroups(next);
         this.setSessions(this.data.sessions);
-        this.measureDragTargets();
+        wx.nextTick(() => this.measureDragTargets());
       }
     }
 
@@ -643,7 +681,7 @@ Page({
     this.setData({ collapsedGroupKeys: next });
     this.saveCollapsedGroups(next);
     this.setSessions(this.data.sessions);
-    this.measureDragTargets();
+    wx.nextTick(() => this.measureDragTargets());
   },
 
   onSessionTouchEnd(event) {
