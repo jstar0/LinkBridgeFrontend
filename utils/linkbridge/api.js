@@ -89,7 +89,27 @@ function request(method, path, data, options = {}) {
           return;
         }
 
-        const error = res.data?.error || { code: 'unknown', message: 'Request failed' };
+        let body = res.data;
+        if (typeof body === 'string') {
+          try {
+            body = JSON.parse(body);
+          } catch (e) {
+            // keep as string
+          }
+        }
+
+        const envelopeError =
+          body && typeof body === 'object' && body.error && typeof body.error === 'object'
+            ? body.error
+            : null;
+
+        const error = {
+          code: String(envelopeError?.code || (res.statusCode === 404 ? 'NOT_FOUND' : 'unknown')),
+          message: String(envelopeError?.message || 'Request failed'),
+          statusCode: res.statusCode,
+          method,
+          path,
+        };
         if (error.code === 'TOKEN_INVALID' || error.code === 'TOKEN_EXPIRED') {
           clearAuth();
           wx.reLaunch({ url: '/pages/login/login' });
@@ -330,7 +350,12 @@ function createLocalFeedRelationshipRequest(addresseeId, verificationMessage) {
  * - TOKEN_INVALID / TOKEN_EXPIRED
  */
 function getLocalFeedHomeBase() {
-  return request('GET', '/v1/home-base').then((res) => res.homeBase ?? null);
+  return request('GET', '/v1/home-base')
+    .then((res) => res.homeBase ?? null)
+    .catch((err) => {
+      if (err?.statusCode !== 404 && err?.code !== 'NOT_FOUND') throw err;
+      return request('GET', '/v1/localfeed/home-base').then((res) => res.homeBase ?? null);
+    });
 }
 
 /**
@@ -353,7 +378,12 @@ function setLocalFeedHomeBase({ name, lat, lng }) {
   const la = Number(lat);
   const ln = Number(lng);
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return Promise.reject({ code: 'VALIDATION', message: 'invalid lat/lng' });
-  return request('PUT', '/v1/home-base', { lat: la, lng: ln }).then((res) => res.homeBase);
+  return request('PUT', '/v1/home-base', { lat: la, lng: ln })
+    .then((res) => res.homeBase)
+    .catch((err) => {
+      if (err?.statusCode !== 404 && err?.code !== 'NOT_FOUND') throw err;
+      return request('PUT', '/v1/localfeed/home-base', { lat: la, lng: ln }).then((res) => res.homeBase);
+    });
 }
 
 /**
@@ -390,13 +420,28 @@ function createLocalFeedPost(payload) {
 
   const imageUrls = Array.isArray(p.imageUrls) ? p.imageUrls : Array.isArray(p.images) ? p.images : [];
 
-  return request('POST', '/v1/local-feed/posts', {
+  const mainPayload = {
     text,
     imageUrls: (imageUrls || []).map((u) => String(u || '').trim()).filter(Boolean),
     radiusM,
     expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : undefined,
     isPinned,
-  }).then((res) => res.post);
+  };
+
+  const legacyPayload = {
+    text,
+    images: (imageUrls || []).map((u) => String(u || '').trim()).filter(Boolean),
+    radiusKm: Number.isFinite(radiusM) ? radiusM / 1000 : undefined,
+    expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : undefined,
+    pinned: !!isPinned,
+  };
+
+  return request('POST', '/v1/local-feed/posts', mainPayload)
+    .then((res) => res.post)
+    .catch((err) => {
+      if (err?.statusCode !== 404 && err?.code !== 'NOT_FOUND') throw err;
+      return request('POST', '/v1/localfeed/posts', legacyPayload).then((res) => res.post);
+    });
 }
 
 /**
@@ -406,7 +451,12 @@ function createLocalFeedPost(payload) {
  * Response: { posts: localFeedPostItem[] }
  */
 function listMyLocalFeedPosts() {
-  return request('GET', '/v1/local-feed/posts').then((res) => res.posts || []);
+  return request('GET', '/v1/local-feed/posts')
+    .then((res) => res.posts || [])
+    .catch((err) => {
+      if (err?.statusCode !== 404 && err?.code !== 'NOT_FOUND') throw err;
+      return request('GET', '/v1/localfeed/posts/mine').then((res) => res.posts || []);
+    });
 }
 
 /**
@@ -418,7 +468,12 @@ function listMyLocalFeedPosts() {
 function deleteLocalFeedPost(postId) {
   const id = String(postId || '').trim();
   if (!id) return Promise.reject({ code: 'VALIDATION', message: 'postId is required' });
-  return request('POST', `/v1/local-feed/posts/${encodeURIComponent(id)}/delete`).then((res) => res);
+  return request('POST', `/v1/local-feed/posts/${encodeURIComponent(id)}/delete`)
+    .then((res) => res)
+    .catch((err) => {
+      if (err?.statusCode !== 404 && err?.code !== 'NOT_FOUND') throw err;
+      return request('DELETE', `/v1/localfeed/posts/${encodeURIComponent(id)}`).then((res) => res);
+    });
 }
 
 /**
@@ -475,7 +530,15 @@ function listLocalFeedPins(params = {}) {
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join('&');
 
-  return request('GET', `/v1/local-feed/pins?${qs}`).then((res) => res.pins || []);
+  const bbox = `${minLat},${minLng},${maxLat},${maxLng}`;
+  const legacyQs = `bbox=${encodeURIComponent(bbox)}&zoom=${encodeURIComponent(p.zoom ?? '')}&limit=${encodeURIComponent(p.limit ?? '')}`;
+
+  return request('GET', `/v1/local-feed/pins?${qs}`)
+    .then((res) => res.pins || [])
+    .catch((err) => {
+      if (err?.statusCode !== 404 && err?.code !== 'NOT_FOUND') throw err;
+      return request('GET', `/v1/localfeed/map/pins?${legacyQs}`).then((res) => res.pins || []);
+    });
 }
 
 /**
@@ -491,7 +554,16 @@ function listLocalFeedUserPosts(userId, viewerLat, viewerLng) {
   const ln = Number(viewerLng);
   const qs = Number.isFinite(la) && Number.isFinite(ln) ? `atLat=${encodeURIComponent(la)}&atLng=${encodeURIComponent(ln)}` : '';
   const suffix = qs ? `?${qs}` : '';
-  return request('GET', `/v1/local-feed/users/${encodeURIComponent(uid)}/posts${suffix}`).then((res) => res.posts || []);
+
+  const legacyQs = Number.isFinite(la) && Number.isFinite(ln) ? `viewerLat=${encodeURIComponent(la)}&viewerLng=${encodeURIComponent(ln)}` : '';
+  const legacySuffix = legacyQs ? `?${legacyQs}` : '';
+
+  return request('GET', `/v1/local-feed/users/${encodeURIComponent(uid)}/posts${suffix}`)
+    .then((res) => res.posts || [])
+    .catch((err) => {
+      if (err?.statusCode !== 404 && err?.code !== 'NOT_FOUND') throw err;
+      return request('GET', `/v1/localfeed/users/${encodeURIComponent(uid)}/posts${legacySuffix}`).then((res) => res.posts || []);
+    });
 }
 
 function normalizeSessionRequestBox(box) {
