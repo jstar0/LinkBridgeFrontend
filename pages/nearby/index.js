@@ -70,6 +70,41 @@ function formatRemaining(ms) {
   return `${minutes}分钟`;
 }
 
+function toFullUrl(url) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return u;
+  return `${api.getBaseUrl()}${u.startsWith('/') ? '' : '/'}${u}`;
+}
+
+function normalizeServerLocalFeedPostItem(post, me) {
+  const p = post || {};
+  const radiusM = Number(p.radiusM);
+  const radiusKm = Number.isFinite(radiusM) ? Math.max(0.1, radiusM / 1000) : 1;
+  const expiresAtMs = Number(p.expiresAtMs || 0) || Date.now() + 30 * 24 * 3600 * 1000;
+  const createdAtMs = Number(p.createdAtMs || 0) || Date.now();
+
+  const images = Array.isArray(p.images) ? p.images : [];
+  const urls = images.map((img) => toFullUrl(img?.url)).filter(Boolean);
+
+  return decoratePost({
+    id: String(p.id || ''),
+    author: {
+      userId: String(p.userId || me?.id || ''),
+      displayName: me?.displayName || me?.username || '我',
+      avatarUrl: me?.avatarUrl || '/static/chat/avatar.png',
+    },
+    text: typeof p.text === 'string' ? p.text : '',
+    images: urls,
+    lat: Number.NaN,
+    lng: Number.NaN,
+    createdAtMs,
+    expiresAtMs,
+    radiusKm,
+    pinned: !!p.isPinned,
+  });
+}
+
 function loadPosts() {
   const raw = wx.getStorageSync(POSTS_KEY);
   const list = safeParseJSON(raw, []);
@@ -392,6 +427,7 @@ Page({
     this.ensureLocation()
       .catch(() => null)
       .then(() => this.refreshFeed())
+      .then(() => this.refreshMyPosts())
       .then(() => {
         if (loggedIn) this.loadRequests();
       });
@@ -580,6 +616,25 @@ Page({
     });
   },
 
+  refreshMyPosts() {
+    if (!api.isLoggedIn()) {
+      this.setData({ myPosts: [] });
+      return Promise.resolve();
+    }
+
+    const me = api.getUser() || {};
+    return api
+      .listMyLocalFeedPosts()
+      .then((posts) => {
+        const normalized = (posts || [])
+          .map((p) => normalizeServerLocalFeedPostItem(p, me))
+          .filter((p) => p && p.id)
+          .slice(0, 50);
+        this.setData({ myPosts: normalized });
+      })
+      .catch(() => null);
+  },
+
   onSwitchMode(e) {
     const mode = e?.currentTarget?.dataset?.mode || 'map';
     if (mode !== 'map' && mode !== 'publish') return;
@@ -596,6 +651,9 @@ Page({
       .catch(() => null)
       .then(() => {
         this.refreshFeed();
+        return this.refreshMyPosts();
+      })
+      .then(() => {
         if (this.data.isLoggedIn) this.loadRequests();
       });
   },
@@ -1141,35 +1199,45 @@ Page({
     const ttlDays = clampNum(this.data.draft?.ttlDays || 30, 1, 365);
     const radiusKm = clampNum(this.data.draft?.radiusKm || 1, 0.1, 50);
     const now = Date.now();
-    const user = api.getUser() || {};
-    const hb = this.data.homeBase;
-    const lat = Number(hb?.lat) || Number(this.data.center.lat);
-    const lng = Number(hb?.lng) || Number(this.data.center.lng);
-    const post = decoratePost({
-      id: `p_${now}_${Math.random().toString(16).slice(2)}`,
-      author: {
-        userId: user?.id || '',
-        displayName: user?.displayName || user?.username || '我',
-        avatarUrl: user?.avatarUrl || '/static/chat/avatar.png',
-      },
-      text,
-      images,
-      lat,
-      lng,
-      createdAtMs: now,
-      expiresAtMs: now + ttlDays * 24 * 3600 * 1000,
-      radiusKm,
-      pinned: !!this.data.draft?.pinned,
+
+    const uploadTasks = images.map((p) => {
+      const path = String(p || '').trim();
+      if (!path) return Promise.resolve('');
+      if (/^https?:\/\//i.test(path)) return Promise.resolve(path);
+      if (path.startsWith('/uploads/') || path.startsWith('/static/')) return Promise.resolve(path);
+      return api
+        .uploadFile(path)
+        .then((res) => String(res?.url || '').trim())
+        .catch(() => '');
     });
 
-    const next = [post, ...(loadPosts() || [])].slice(0, 50);
-    savePosts(next);
-    this.setData({
-      publishVisible: false,
-      draft: { text: '', images: [], ttlDays: '30', radiusKm: '1', pinned: false },
-    });
-    this.refreshFeed();
-    wx.showToast({ title: '已发布（mock）', icon: 'none' });
+    wx.showLoading({ title: '发布中...' });
+    Promise.all(uploadTasks)
+      .then((urls) => {
+        const imageUrls = (urls || []).map((u) => String(u || '').trim()).filter(Boolean);
+        const radiusM = Math.round(radiusKm * 1000);
+        const expiresAtMs = now + ttlDays * 24 * 3600 * 1000;
+        return api.createLocalFeedPost({
+          text,
+          imageUrls,
+          radiusM,
+          expiresAtMs,
+          isPinned: !!this.data.draft?.pinned,
+        });
+      })
+      .then(() => {
+        wx.hideLoading();
+        this.setData({
+          publishVisible: false,
+          draft: { text: '', images: [], ttlDays: '30', radiusKm: '1', pinned: false },
+        });
+        wx.showToast({ title: '已发布', icon: 'none' });
+        return this.refreshMyPosts();
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        wx.showToast({ title: err?.message || '发布失败', icon: 'none' });
+      });
   },
 
   onSetHomeBaseToCurrent() {
