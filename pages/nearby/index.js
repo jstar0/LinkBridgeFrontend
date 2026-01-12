@@ -781,14 +781,18 @@ Page({
           wx.showToast({ title: '请求已存在', icon: 'none' });
           return;
         }
-        if (code === 'LOCALFEED_REQUEST_DAILY_LIMIT' || code === 'RATE_LIMITED') {
+        if (code === 'RATE_LIMITED') {
           this.setData({ dailyLimitReached: true }, () => this.refreshConnectUi());
           wx.showToast({ title: err?.message || '今日请求次数已达上限', icon: 'none' });
           return;
         }
-        if (code === 'LOCALFEED_REQUEST_COOLDOWN') {
+        if (code === 'COOLDOWN_ACTIVE') {
           this.setRelationshipStatus(peerId, { state: 'cooldown', untilMs: Date.now() + COOLDOWN_MS });
           wx.showToast({ title: err?.message || '冷却中，稍后再试', icon: 'none' });
+          return;
+        }
+        if (code === 'SESSION_EXISTS') {
+          wx.showToast({ title: '会话已存在，请在会话列表中打开', icon: 'none' });
           return;
         }
         wx.showToast({ title: err?.message || '发送失败', icon: 'none' });
@@ -816,7 +820,7 @@ Page({
 
     this.setData({ loadingRequests: true });
     api
-      .listSessionRequests('in', 'pending')
+      .listSessionRequests('incoming', 'pending')
       .then((requests) => {
         const items = (requests || []).slice(0, 20);
         return Promise.all(
@@ -853,7 +857,7 @@ Page({
       return Promise.resolve();
     }
 
-    return Promise.allSettled([api.listSessions('active'), api.listSessionRequests('out', 'pending')]).then(
+    return Promise.allSettled([api.listSessions('active'), api.listSessionRequests('outgoing', 'pending')]).then(
       ([sessRes, reqRes]) => {
         const sessions = sessRes.status === 'fulfilled' ? sessRes.value || [] : [];
         const outReq = reqRes.status === 'fulfilled' ? reqRes.value || [] : [];

@@ -217,7 +217,7 @@ Page({
 
   getIncomingRequests() {
     return api
-      .listSessionRequests('in', 'pending')
+      .listSessionRequests('incoming', 'pending')
       .then((requests) => {
         const items = (requests || []).slice(0, 10);
         return Promise.all(

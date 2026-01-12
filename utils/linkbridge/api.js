@@ -290,12 +290,11 @@ function consumeSessionInvite(code) {
 }
 
 /**
- * Create a "map/local feed" relationship request (request -> accept -> session created).
+ * Create a "map relationship request" (request -> accept -> session created).
  *
  * POST /v1/session-requests
  * Request body:
  * - addresseeId: string (required)        // target user id
- * - source: 'localfeed' (required)       // relationship source (map/local feed)
  * - verificationMessage: string (optional, max ~120 chars suggested)
  *
  * Response:
@@ -303,141 +302,208 @@ function consumeSessionInvite(code) {
  * - created: boolean
  * - hint?: string
  *
- * Error codes (suggested; backend may add more):
+ * Error codes (backend main as of now):
  * - TOKEN_INVALID / TOKEN_EXPIRED
- * - VALIDATION
+ * - VALIDATION_ERROR
  * - SESSION_REQUEST_EXISTS
- * - LOCALFEED_REQUEST_DAILY_LIMIT (daily max 10)
- * - LOCALFEED_REQUEST_COOLDOWN (cooldown 3 days after rejection)
+ * - RATE_LIMITED (daily max 10 for map requests)
+ * - COOLDOWN_ACTIVE (cooldown 3 days after rejection)
+ * - SESSION_EXISTS (session already exists and is active)
  */
 function createLocalFeedRelationshipRequest(addresseeId, verificationMessage) {
   const addressee = String(addresseeId || '').trim();
   const msg = String(verificationMessage || '').trim();
   if (!addressee) return Promise.reject({ code: 'VALIDATION', message: 'addresseeId is required' });
-  return request('POST', '/v1/session-requests', {
-    addresseeId: addressee,
-    source: 'localfeed',
-    verificationMessage: msg ? msg.slice(0, 120) : '',
-  }).then((res) => res);
+  return request('POST', '/v1/session-requests', { addresseeId: addressee, verificationMessage: msg ? msg.slice(0, 120) : '' }).then(
+    (res) => res
+  );
 }
 
 /**
- * Local Feed: get current user's Home Base Address.
+ * Local Feed: get current user's Home Base (location pin).
  *
- * GET /v1/localfeed/home-base
+ * GET /v1/home-base
  * Response:
- * - homeBase: { name?: string, lat: number, lng: number, updatedAtMs: number } | null
+ * - homeBase: { lat: number, lng: number, lastUpdatedYmd: number, updatedAtMs: number } | null
  *
  * Error codes:
  * - TOKEN_INVALID / TOKEN_EXPIRED
  */
 function getLocalFeedHomeBase() {
-  return request('GET', '/v1/localfeed/home-base').then((res) => res.homeBase ?? null);
+  return request('GET', '/v1/home-base').then((res) => res.homeBase ?? null);
 }
 
 /**
- * Local Feed: set/update current user's Home Base Address.
+ * Local Feed: set/update current user's Home Base (location pin).
  *
- * PUT /v1/localfeed/home-base
+ * PUT /v1/home-base
  * Request body:
- * - name?: string
  * - lat: number (required)
  * - lng: number (required)
  *
  * Response:
- * - homeBase: { name?: string, lat: number, lng: number, updatedAtMs: number }
+ * - homeBase: { lat: number, lng: number, lastUpdatedYmd: number, updatedAtMs: number }
  *
- * Error codes (suggested; backend may add more):
+ * Error codes (backend main as of now):
  * - TOKEN_INVALID / TOKEN_EXPIRED
- * - VALIDATION
- * - HOME_BASE_DAILY_LIMIT (daily max 1 change; reset at 00:00)
+ * - VALIDATION_ERROR
+ * - HOME_BASE_UPDATE_LIMITED (daily max 1 change; reset at 00:00)
  */
 function setLocalFeedHomeBase({ name, lat, lng }) {
-  const n = String(name || '').trim();
   const la = Number(lat);
   const ln = Number(lng);
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return Promise.reject({ code: 'VALIDATION', message: 'invalid lat/lng' });
-  return request('PUT', '/v1/localfeed/home-base', { name: n, lat: la, lng: ln }).then((res) => res.homeBase);
+  return request('PUT', '/v1/home-base', { lat: la, lng: ln }).then((res) => res.homeBase);
 }
 
 /**
  * Local Feed: create a post.
  *
- * POST /v1/localfeed/posts
+ * POST /v1/local-feed/posts
  * Request body:
  * - text?: string
- * - images?: string[]        // already-uploaded URLs or server-side file ids (TBD)
- * - pinned?: boolean
- * - radiusKm: number         // visibility radius
+ * - imageUrls?: string[]     // already-uploaded URLs (use api.uploadFile first)
+ * - isPinned?: boolean
+ * - radiusM?: number         // visibility radius (meters)
  * - expiresAtMs: number      // absolute expire time
  *
  * Response:
- * - post: { id, author, text, images, pinned, radiusKm, createdAtMs, expiresAtMs, ... }
+ * - post: { id, userId, text?, radiusM, expiresAtMs, isPinned, createdAtMs, updatedAtMs, images:[{url,sortOrder}] }
  *
  * Error codes:
  * - TOKEN_INVALID / TOKEN_EXPIRED
- * - VALIDATION
+ * - VALIDATION_ERROR
  */
 function createLocalFeedPost(payload) {
-  return request('POST', '/v1/localfeed/posts', payload).then((res) => res.post);
+  const p = payload || {};
+  const text = typeof p.text === 'string' ? p.text : p.text == null ? undefined : String(p.text);
+  const expiresAtMs = Number(p.expiresAtMs);
+
+  const isPinned = typeof p.isPinned === 'boolean' ? p.isPinned : typeof p.pinned === 'boolean' ? p.pinned : undefined;
+
+  let radiusM = p.radiusM != null ? Number(p.radiusM) : NaN;
+  if (!Number.isFinite(radiusM) && p.radiusKm != null) {
+    const km = Number(p.radiusKm);
+    if (Number.isFinite(km)) radiusM = Math.round(km * 1000);
+  }
+  if (!Number.isFinite(radiusM)) radiusM = undefined;
+
+  const imageUrls = Array.isArray(p.imageUrls) ? p.imageUrls : Array.isArray(p.images) ? p.images : [];
+
+  return request('POST', '/v1/local-feed/posts', {
+    text,
+    imageUrls: (imageUrls || []).map((u) => String(u || '').trim()).filter(Boolean),
+    radiusM,
+    expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : undefined,
+    isPinned,
+  }).then((res) => res.post);
 }
 
 /**
  * Local Feed: list my posts.
  *
- * GET /v1/localfeed/posts/mine
- * Response: { posts: Post[] }
+ * GET /v1/local-feed/posts
+ * Response: { posts: localFeedPostItem[] }
  */
 function listMyLocalFeedPosts() {
-  return request('GET', '/v1/localfeed/posts/mine').then((res) => res.posts || []);
+  return request('GET', '/v1/local-feed/posts').then((res) => res.posts || []);
 }
 
 /**
  * Local Feed: delete my post.
  *
- * DELETE /v1/localfeed/posts/:id
- * Response: { ok: true }
+ * POST /v1/local-feed/posts/:id/delete
+ * Response: { deleted: true }
  */
 function deleteLocalFeedPost(postId) {
   const id = String(postId || '').trim();
   if (!id) return Promise.reject({ code: 'VALIDATION', message: 'postId is required' });
-  return request('DELETE', `/v1/localfeed/posts/${encodeURIComponent(id)}`).then((res) => res);
+  return request('POST', `/v1/local-feed/posts/${encodeURIComponent(id)}/delete`).then((res) => res);
 }
 
 /**
  * Local Feed: list map pins for current view.
  *
- * GET /v1/localfeed/map/pins?bbox=swLat,swLng,neLat,neLng&zoom=...&limit=...
+ * GET /v1/local-feed/pins?minLat=...&maxLat=...&minLng=...&maxLng=...&centerLat=...&centerLng=...&limit=...
  * Response: { pins: Pin[] }
  *
- * Pin schema (suggested):
+ * Pin schema (backend main as of now):
  * - userId: string
  * - displayName: string
- * - avatarUrl: string
+ * - avatarUrl?: string
  * - lat: number
  * - lng: number
- * - hasPosts: boolean
+ * - updatedAtMs: number
  */
-function listLocalFeedPins({ bbox, zoom, limit }) {
-  const qs = `bbox=${encodeURIComponent(bbox || '')}&zoom=${encodeURIComponent(zoom ?? '')}&limit=${encodeURIComponent(limit ?? '')}`;
-  return request('GET', `/v1/localfeed/map/pins?${qs}`).then((res) => res.pins || []);
+function listLocalFeedPins(params = {}) {
+  const p = params || {};
+  let minLat = p.minLat != null ? Number(p.minLat) : undefined;
+  let maxLat = p.maxLat != null ? Number(p.maxLat) : undefined;
+  let minLng = p.minLng != null ? Number(p.minLng) : undefined;
+  let maxLng = p.maxLng != null ? Number(p.maxLng) : undefined;
+
+  if (![minLat, maxLat, minLng, maxLng].every(Number.isFinite)) {
+    const raw = String(p.bbox || '').trim();
+    if (raw) {
+      const parts = raw.split(',').map((x) => Number(String(x || '').trim()));
+      if (parts.length === 4 && parts.every(Number.isFinite)) {
+        [minLat, minLng, maxLat, maxLng] = parts;
+      }
+    }
+  }
+
+  if (![minLat, maxLat, minLng, maxLng].every(Number.isFinite)) {
+    return Promise.reject({ code: 'VALIDATION', message: 'bbox/minLat/maxLat/minLng/maxLng is required' });
+  }
+
+  const centerLatRaw = p.centerLat != null ? Number(p.centerLat) : (minLat + maxLat) / 2;
+  const centerLngRaw = p.centerLng != null ? Number(p.centerLng) : (minLng + maxLng) / 2;
+  if (![centerLatRaw, centerLngRaw].every(Number.isFinite)) {
+    return Promise.reject({ code: 'VALIDATION', message: 'centerLat/centerLng is required' });
+  }
+
+  const qs = [
+    ['minLat', minLat],
+    ['maxLat', maxLat],
+    ['minLng', minLng],
+    ['maxLng', maxLng],
+    ['centerLat', centerLatRaw],
+    ['centerLng', centerLngRaw],
+    ['limit', p.limit],
+  ]
+    .filter(([, v]) => v !== undefined && v !== null && String(v) !== '')
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+
+  return request('GET', `/v1/local-feed/pins?${qs}`).then((res) => res.pins || []);
 }
 
 /**
  * Local Feed: list a user's visible posts for the current viewer.
  *
- * GET /v1/localfeed/users/:userId/posts?viewerLat=...&viewerLng=...
- * Response: { posts: Post[] }
+ * GET /v1/local-feed/users/:userId/posts?atLat=...&atLng=...
+ * Response: { posts: localFeedPostItem[] }
  */
 function listLocalFeedUserPosts(userId, viewerLat, viewerLng) {
   const uid = String(userId || '').trim();
   if (!uid) return Promise.reject({ code: 'VALIDATION', message: 'userId is required' });
-  const qs = `viewerLat=${encodeURIComponent(viewerLat ?? '')}&viewerLng=${encodeURIComponent(viewerLng ?? '')}`;
-  return request('GET', `/v1/localfeed/users/${encodeURIComponent(uid)}/posts?${qs}`).then((res) => res.posts || []);
+  const la = Number(viewerLat);
+  const ln = Number(viewerLng);
+  const qs = Number.isFinite(la) && Number.isFinite(ln) ? `atLat=${encodeURIComponent(la)}&atLng=${encodeURIComponent(ln)}` : '';
+  const suffix = qs ? `?${qs}` : '';
+  return request('GET', `/v1/local-feed/users/${encodeURIComponent(uid)}/posts${suffix}`).then((res) => res.posts || []);
 }
 
-function listSessionRequests(box = 'in', status = 'pending') {
-  const qs = `box=${encodeURIComponent(box)}&status=${encodeURIComponent(status)}`;
+function normalizeSessionRequestBox(box) {
+  const v = String(box || '').trim();
+  if (v === 'incoming' || v === 'outgoing') return v;
+  if (v === 'in') return 'incoming';
+  if (v === 'out') return 'outgoing';
+  return 'incoming';
+}
+
+function listSessionRequests(box = 'incoming', status = 'pending') {
+  const qs = `box=${encodeURIComponent(normalizeSessionRequestBox(box))}&status=${encodeURIComponent(status)}`;
   return request('GET', `/v1/session-requests?${qs}`).then((res) => res.requests || []);
 }
 
