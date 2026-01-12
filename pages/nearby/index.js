@@ -560,7 +560,7 @@ Page({
   ensureLocation() {
     if (typeof wx?.getLocation !== 'function') {
       this.setData({ locationStatus: '当前环境不支持定位' });
-      return Promise.resolve();
+      return Promise.resolve(null);
     }
 
     this.setData({ locationStatus: '定位中…' });
@@ -572,19 +572,20 @@ Page({
           const lat = Number(res?.latitude);
           const lng = Number(res?.longitude);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-            this.setData({ locationStatus: '定位失败' });
-            resolve();
+            this.setData({ locationStatus: '定位失败' }, () => resolve(null));
             return;
           }
-          this.setData({
-            center: { lat, lng },
-            locationStatus: '已定位',
-          });
-          resolve();
+          this.setData({ center: { lat, lng }, locationStatus: '已定位' }, () => resolve({ lat, lng }));
         },
-        fail: () => {
-          this.setData({ locationStatus: '定位失败/未授权' });
-          resolve();
+        fail: (err) => {
+          const msg = String(err?.errMsg || '').toLowerCase();
+          const isAuth =
+            msg.includes('auth deny') ||
+            msg.includes('authorize') ||
+            msg.includes('auth') ||
+            msg.includes('permission') ||
+            msg.includes('no permission');
+          this.setData({ locationStatus: isAuth ? '定位失败/未授权' : '定位失败' }, () => resolve(null));
         },
       });
     });
@@ -1288,11 +1289,27 @@ Page({
 
     wx.showLoading({ title: '定位中...' });
     this.ensureLocation()
-      .then(() => {
-        const lat = Number(this.data.center.lat);
-        const lng = Number(this.data.center.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('定位失败');
-        return api.setLocalFeedHomeBase({ lat, lng }).then((hb) => {
+      .then((loc) => {
+        if (!loc) {
+          wx.hideLoading();
+          wx.showModal({
+            title: '需要定位权限',
+            content: '请允许获取定位后再使用“用当前位置设置”。你也可以选择“地图选点”。',
+            confirmText: '去授权',
+            cancelText: '取消',
+            success: (res) => {
+              if (!res?.confirm) return;
+              if (typeof wx?.openSetting !== 'function') {
+                wx.showToast({ title: '当前环境不支持打开设置', icon: 'none' });
+                return;
+              }
+              wx.openSetting({});
+            },
+          });
+          return null;
+        }
+
+        return api.setLocalFeedHomeBase({ lat: loc.lat, lng: loc.lng }).then((hb) => {
           const homeBase = normalizeHomeBaseFromServer(hb);
           const needHomeBase = !homeBase;
           this.setData({ homeBase, needHomeBase }, () => this.refreshFeed());
