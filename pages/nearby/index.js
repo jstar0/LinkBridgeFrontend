@@ -3,14 +3,8 @@ import useToastBehavior from '~/behaviors/useToast';
 const api = require('../../utils/linkbridge/api');
 
 const POSTS_KEY = 'lb_nearby_posts_mock_v1';
-const HOME_BASE_KEY_PREFIX = 'lb_localfeed_home_base_v1_';
 const COOLDOWN_MS = 3 * 24 * 3600 * 1000;
 const HOMEBASE_GUIDE_KEY_PREFIX = 'lb_localfeed_homebase_guide_shown_v1_';
-
-function getHomeBaseKey(userId) {
-  const id = String(userId || '').trim();
-  return `${HOME_BASE_KEY_PREFIX}${id || 'anonymous'}`;
-}
 
 function getHomeBaseGuideKey(userId) {
   const id = String(userId || '').trim();
@@ -331,26 +325,20 @@ function limitMarkers(posts, bbox, maxCount) {
   return filtered.slice(0, max);
 }
 
-function loadHomeBase(userId) {
-  const raw = wx.getStorageSync(getHomeBaseKey(userId));
-  const obj = safeParseJSON(raw, null);
-  if (!obj) return null;
-  const lat = Number(obj.lat);
-  const lng = Number(obj.lng);
+function normalizeHomeBaseFromServer(homeBase) {
+  if (!homeBase) return null;
+  const lat = Number(homeBase.lat);
+  const lng = Number(homeBase.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   return {
-    name: String(obj.name || ''),
+    name: '',
     lat,
     lng,
     latText: roundFixed(lat, 6),
     lngText: roundFixed(lng, 6),
-    updatedAtMs: Number(obj.updatedAtMs || 0) || 0,
+    lastUpdatedYmd: Number(homeBase.lastUpdatedYmd || 0) || 0,
+    updatedAtMs: Number(homeBase.updatedAtMs || 0) || 0,
   };
-}
-
-function saveHomeBase(userId, homeBase) {
-  const key = getHomeBaseKey(userId);
-  wx.setStorageSync(key, JSON.stringify(homeBase || null));
 }
 
 function calcModeIndicatorLeft(mode) {
@@ -420,43 +408,46 @@ Page({
     if (loggedIn) api.connectWebSocket();
 
     const me = api.getUser() || {};
-    const homeBase = loggedIn && me?.id ? loadHomeBase(me.id) : null;
-    const needHomeBase = !!loggedIn && !homeBase;
-    this.setData({ homeBase, needHomeBase });
 
-    this.ensureLocation()
+    const homeBaseTask = loggedIn
+      ? this.refreshHomeBaseFromServer()
+      : Promise.resolve({ homeBase: null, needHomeBase: false });
+
+    Promise.allSettled([this.ensureLocation(), homeBaseTask])
       .catch(() => null)
       .then(() => this.refreshFeed())
       .then(() => this.refreshMyPosts())
       .then(() => {
         if (loggedIn) this.loadRequests();
+      })
+      .then(() => {
+        const needHomeBase = !!this.data.needHomeBase;
+        // Strong onboarding: if Home Base is missing, guide user to set it (once per user).
+        if (loggedIn && needHomeBase && me?.id) {
+          try {
+            const key = getHomeBaseGuideKey(me.id);
+            const shown = !!wx.getStorageSync(key);
+            if (!shown) {
+              wx.setStorageSync(key, 1);
+              wx.showModal({
+                title: '需要设置固定地址点位',
+                content: '首次使用本地信息流需要设置一个固定地址点位，否则无法发布且你的头像点位不会出现在地图上。',
+                confirmText: '去设置',
+                cancelText: '稍后',
+                success: (res) => {
+                  if (res?.confirm) this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
+                },
+              });
+            }
+          } catch (e) {
+            // ignore
+          }
+          // Default to publish view so the user sees the setup UI immediately.
+          this.setData({ viewMode: 'publish', modeIndicatorLeft: calcModeIndicatorLeft('publish') });
+        }
       });
 
     if (loggedIn) this.bindWs();
-
-    // Strong onboarding: if Home Base is missing, guide user to set it (once per user).
-    if (needHomeBase && me?.id) {
-      try {
-        const key = getHomeBaseGuideKey(me.id);
-        const shown = !!wx.getStorageSync(key);
-        if (!shown) {
-          wx.setStorageSync(key, 1);
-          wx.showModal({
-            title: '需要设置固定地址点位',
-            content: '首次使用本地信息流需要设置一个固定地址点位，否则无法发布且你的头像点位不会出现在地图上。',
-            confirmText: '去设置',
-            cancelText: '稍后',
-            success: (res) => {
-              if (res?.confirm) this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
-            },
-          });
-        }
-      } catch (e) {
-        // ignore
-      }
-      // Default to publish view so the user sees the setup UI immediately.
-      this.setData({ viewMode: 'publish', modeIndicatorLeft: calcModeIndicatorLeft('publish') });
-    }
   },
 
   onHide() {
@@ -614,6 +605,29 @@ Page({
       markerMeta,
       myPosts,
     });
+  },
+
+  refreshHomeBaseFromServer() {
+    if (!api.isLoggedIn()) {
+      this.setData({ homeBase: null, needHomeBase: false });
+      return Promise.resolve({ homeBase: null, needHomeBase: false });
+    }
+
+    return api
+      .getLocalFeedHomeBase()
+      .then((hb) => {
+        const homeBase = normalizeHomeBaseFromServer(hb);
+        const needHomeBase = !homeBase;
+        this.setData({ homeBase, needHomeBase });
+        return { homeBase, needHomeBase };
+      })
+      .catch(() => {
+        // Keep previous value to avoid flicker.
+        const homeBase = this.data.homeBase || null;
+        const needHomeBase = !!api.isLoggedIn() && !homeBase;
+        this.setData({ needHomeBase });
+        return { homeBase, needHomeBase };
+      });
   },
 
   refreshMyPosts() {
@@ -1249,18 +1263,23 @@ Page({
     wx.showLoading({ title: '定位中...' });
     this.ensureLocation()
       .then(() => {
-        const me = api.getUser() || {};
-        if (!me?.id) throw new Error('未登录');
-        const hb = {
-          name: '当前位置',
-          lat: Number(this.data.center.lat),
-          lng: Number(this.data.center.lng),
-          latText: roundFixed(Number(this.data.center.lat), 6),
-          lngText: roundFixed(Number(this.data.center.lng), 6),
-          updatedAtMs: Date.now(),
-        };
-        saveHomeBase(me.id, hb);
-        this.setData({ homeBase: hb, needHomeBase: false }, () => this.refreshFeed());
+        const lat = Number(this.data.center.lat);
+        const lng = Number(this.data.center.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('定位失败');
+        return api.setLocalFeedHomeBase({ lat, lng }).then((hb) => {
+          const homeBase = normalizeHomeBaseFromServer(hb);
+          const needHomeBase = !homeBase;
+          this.setData({ homeBase, needHomeBase }, () => this.refreshFeed());
+          wx.showToast({ title: '已更新位置', icon: 'none' });
+        });
+      })
+      .catch((err) => {
+        const code = err?.code || '';
+        if (code === 'HOME_BASE_UPDATE_LIMITED') {
+          wx.showToast({ title: '今天只能修改一次位置（0点重置）', icon: 'none' });
+          return;
+        }
+        wx.showToast({ title: err?.message || '设置失败', icon: 'none' });
       })
       .finally(() => wx.hideLoading());
   },
@@ -1283,18 +1302,25 @@ Page({
           wx.showToast({ title: '选点失败', icon: 'none' });
           return;
         }
-        const me = api.getUser() || {};
-        if (!me?.id) return;
-        const hb = {
-          name: String(res?.name || res?.address || '选定位置'),
-          lat,
-          lng,
-          latText: roundFixed(lat, 6),
-          lngText: roundFixed(lng, 6),
-          updatedAtMs: Date.now(),
-        };
-        saveHomeBase(me.id, hb);
-        this.setData({ homeBase: hb, needHomeBase: false }, () => this.refreshFeed());
+
+        wx.showLoading({ title: '保存中...' });
+        api
+          .setLocalFeedHomeBase({ lat, lng })
+          .then((hb) => {
+            const homeBase = normalizeHomeBaseFromServer(hb);
+            const needHomeBase = !homeBase;
+            this.setData({ homeBase, needHomeBase }, () => this.refreshFeed());
+            wx.showToast({ title: '已更新位置', icon: 'none' });
+          })
+          .catch((err) => {
+            const code = err?.code || '';
+            if (code === 'HOME_BASE_UPDATE_LIMITED') {
+              wx.showToast({ title: '今天只能修改一次位置（0点重置）', icon: 'none' });
+              return;
+            }
+            wx.showToast({ title: err?.message || '保存失败', icon: 'none' });
+          })
+          .finally(() => wx.hideLoading());
       },
       fail: (err) => {
         const msg = String(err?.errMsg || '').toLowerCase();
