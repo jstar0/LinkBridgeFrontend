@@ -34,11 +34,11 @@
         </view>
 
         <view class="post__meta">
-          {{item.createdAtText}} · 半径 {{item.radiusKm}}km · 有效至 {{item.expiresAtText}}
+          {{item.createdAtText}} · 有效至 {{item.expiresAtText}}
         </view>
       </view>
 
-      <view class="footer-hint">已按发布者设置的有效期/半径做展示裁剪</view>
+      <view class="footer-hint">已按发布者设置的有效期/可见范围做展示裁剪</view>
     </view>
   </view>
 </view>

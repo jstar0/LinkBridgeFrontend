@@ -82,8 +82,6 @@ function toFullUrl(url) {
 
 function normalizeServerLocalFeedPostItem(post, me) {
   const p = post || {};
-  const radiusM = Number(p.radiusM);
-  const radiusKm = Number.isFinite(radiusM) ? Math.max(0.1, radiusM / 1000) : 1;
   const expiresAtMs = Number(p.expiresAtMs || 0) || Date.now() + 30 * 24 * 3600 * 1000;
   const createdAtMs = Number(p.createdAtMs || 0) || Date.now();
 
@@ -103,7 +101,6 @@ function normalizeServerLocalFeedPostItem(post, me) {
     lng: Number.NaN,
     createdAtMs,
     expiresAtMs,
-    radiusKm,
     pinned: !!p.isPinned,
   });
 }
@@ -122,13 +119,11 @@ function savePosts(list) {
 function decoratePost(p) {
   const createdAtMs = Number(p?.createdAtMs || 0) || Date.now();
   const expiresAtMs = Number(p?.expiresAtMs || 0) || createdAtMs + 30 * 24 * 3600 * 1000;
-  const radiusKm = clampNum(p?.radiusKm ?? 1, 0.1, 50);
   const pinned = !!p?.pinned;
   return {
     ...p,
     createdAtMs,
     expiresAtMs,
-    radiusKm: Number(radiusKm.toFixed(2)),
     pinned,
     createdAtText: formatTime(createdAtMs),
     expiresAtText: formatTime(expiresAtMs),
@@ -321,14 +316,6 @@ function filterVisiblePosts(posts, viewerLat, viewerLng, nowMs) {
   const list = Array.isArray(posts) ? posts : [];
   return list
     .filter((p) => (Number(p?.expiresAtMs || 0) || 0) > now)
-    .filter((p) => {
-      const lat = Number(p.lat);
-      const lng = Number(p.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-      const r = clampNum(p.radiusKm ?? 1, 0.1, 50);
-      if (!Number.isFinite(viewerLat) || !Number.isFinite(viewerLng)) return true;
-      return distanceKm(viewerLat, viewerLng, lat, lng) <= r;
-    })
     .map(decoratePost)
     .sort((a, b) => {
       if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
@@ -361,12 +348,17 @@ function normalizeHomeBaseFromServer(homeBase) {
   const lat = Number(homeBase.lat);
   const lng = Number(homeBase.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const radiusM = Number(homeBase.radiusM);
+  const safeRadiusM = Number.isFinite(radiusM) && radiusM > 0 ? Math.round(radiusM) : 1100;
+  const radiusText = `${(safeRadiusM / 1000).toFixed(safeRadiusM % 1000 === 0 ? 0 : 1)}km`;
   return {
     name: '',
     lat,
     lng,
     latText: roundFixed(lat, 6),
     lngText: roundFixed(lng, 6),
+    radiusM: safeRadiusM,
+    radiusText,
     lastUpdatedYmd: Number(homeBase.lastUpdatedYmd || 0) || 0,
     updatedAtMs: Number(homeBase.updatedAtMs || 0) || 0,
   };
@@ -409,7 +401,7 @@ Page({
     pendingRequests: [],
 
     publishVisible: false,
-    draft: { text: '', images: [], ttlDays: '30', radiusKm: '1', pinned: false },
+    draft: { text: '', images: [], ttlDays: '30', pinned: false },
 
     verificationVisible: false,
     verificationText: '',
@@ -495,8 +487,8 @@ Page({
             if (!shown) {
               wx.setStorageSync(key, 1);
               wx.showModal({
-                title: '需要设置固定地址点位',
-                content: '首次使用本地信息流需要设置一个固定地址点位，否则无法发布且你的头像点位不会出现在地图上。',
+                title: '需要设置我的位置',
+                content: '首次使用本地信息流需要先设置我的位置，否则无法发布且你的头像点位不会出现在地图上。',
                 confirmText: '去设置',
                 cancelText: '稍后',
                 success: (res) => {
@@ -804,7 +796,7 @@ Page({
 
   onTapConnect() {
     if (this.data.needHomeBase) {
-      this.onShowToast('#t-toast', '请先设置固定地址点位');
+      this.onShowToast('#t-toast', '请先设置我的位置');
       this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
       return;
     }
@@ -1016,7 +1008,7 @@ Page({
       this.setData({
         connectButtonText: '请先设置地址',
         connectButtonDisabled: false,
-        connectButtonHint: '首次使用需先设置固定地址点位',
+        connectButtonHint: '首次使用需先设置我的位置',
       });
       return;
     }
@@ -1132,7 +1124,7 @@ Page({
       return;
     }
     if (this.data.needHomeBase) {
-      wx.showToast({ title: '请先设置固定地址点位', icon: 'none' });
+      wx.showToast({ title: '请先设置我的位置', icon: 'none' });
       this.onSwitchMode({ currentTarget: { dataset: { mode: 'publish' } } });
       return;
     }
@@ -1159,11 +1151,6 @@ Page({
   onTtlDaysInput(e) {
     const v = String(e?.detail?.value || '').trim();
     this.setData({ 'draft.ttlDays': v });
-  },
-
-  onRadiusKmInput(e) {
-    const v = String(e?.detail?.value || '').trim();
-    this.setData({ 'draft.radiusKm': v });
   },
 
   onPinnedChange(e) {
@@ -1235,7 +1222,7 @@ Page({
       return;
     }
     if (this.data.needHomeBase) {
-      wx.showToast({ title: '请先设置固定地址点位', icon: 'none' });
+      wx.showToast({ title: '请先设置我的位置', icon: 'none' });
       return;
     }
 
@@ -1247,7 +1234,6 @@ Page({
     }
 
     const ttlDays = clampNum(this.data.draft?.ttlDays || 30, 1, 365);
-    const radiusKm = clampNum(this.data.draft?.radiusKm || 1, 0.1, 50);
     const now = Date.now();
 
     const uploadTasks = images.map((p) => {
@@ -1265,12 +1251,10 @@ Page({
     Promise.all(uploadTasks)
       .then((urls) => {
         const imageUrls = (urls || []).map((u) => String(u || '').trim()).filter(Boolean);
-        const radiusM = Math.round(radiusKm * 1000);
         const expiresAtMs = now + ttlDays * 24 * 3600 * 1000;
         return api.createLocalFeedPost({
           text,
           imageUrls,
-          radiusM,
           expiresAtMs,
           isPinned: !!this.data.draft?.pinned,
         });
@@ -1279,7 +1263,7 @@ Page({
         safeHideLoading();
         this.setData({
           publishVisible: false,
-          draft: { text: '', images: [], ttlDays: '30', radiusKm: '1', pinned: false },
+          draft: { text: '', images: [], ttlDays: '30', pinned: false },
         });
         wx.showToast({ title: '已发布', icon: 'none' });
         return this.refreshMyPosts();
@@ -1349,7 +1333,9 @@ Page({
           return null;
         }
 
-        return api.setLocalFeedHomeBase({ lat: loc.lat, lng: loc.lng }).then((hb) => {
+        const currentRadiusM = Number(this.data.homeBase?.radiusM);
+        const radiusM = Number.isFinite(currentRadiusM) && currentRadiusM > 0 ? Math.round(currentRadiusM) : undefined;
+        return api.setLocalFeedHomeBase({ lat: loc.lat, lng: loc.lng, radiusM }).then((hb) => {
           const homeBase = normalizeHomeBaseFromServer(hb);
           const needHomeBase = !homeBase;
           this.setData({ homeBase, needHomeBase }, () => this.refreshFeed());
@@ -1359,12 +1345,66 @@ Page({
       .catch((err) => {
         const code = err?.code || '';
         if (code === 'HOME_BASE_UPDATE_LIMITED') {
-          wx.showToast({ title: '今天只能修改一次位置（0点重置）', icon: 'none' });
+          wx.showToast({ title: '今天最多修改 3 次位置（0点重置）', icon: 'none' });
           return;
         }
         wx.showToast({ title: err?.message || '设置失败', icon: 'none' });
       })
       .finally(() => safeHideLoading());
+  },
+
+  onChooseHomeBaseRadius() {
+    if (!api.isLoggedIn()) {
+      wx.navigateTo({ url: '/pages/login/login' });
+      return;
+    }
+    const hb = this.data.homeBase;
+    if (!hb) {
+      wx.showToast({ title: '请先设置我的位置', icon: 'none' });
+      return;
+    }
+
+    const options = [
+      { label: '0.5km', value: 500 },
+      { label: '1.1km（推荐）', value: 1100 },
+      { label: '2km', value: 2000 },
+      { label: '5km', value: 5000 },
+      { label: '10km', value: 10000 },
+    ];
+    const labels = options.map((o) => o.label);
+    const current = Number(hb.radiusM);
+    const currentIndex = options.findIndex((o) => o.value === current);
+
+    wx.showActionSheet({
+      itemList: labels,
+      success: (res) => {
+        const idx = Number(res?.tapIndex);
+        if (!Number.isFinite(idx) || idx < 0 || idx >= options.length) return;
+        const radiusM = options[idx].value;
+        wx.showLoading({ title: '更新中...' });
+        api
+          .setLocalFeedHomeBase({ lat: hb.lat, lng: hb.lng, radiusM })
+          .then((serverHb) => {
+            safeHideLoading();
+            const next = normalizeHomeBaseFromServer(serverHb);
+            this.setData({ homeBase: next });
+            wx.showToast({ title: '已更新范围', icon: 'none' });
+          })
+          .catch((err) => {
+            safeHideLoading();
+            wx.showToast({ title: err?.message || '更新失败', icon: 'none' });
+          });
+      },
+      fail: (err) => {
+        const msg = String(err?.errMsg || '').toLowerCase();
+        if (msg.includes('cancel')) return;
+        wx.showToast({ title: '操作失败', icon: 'none' });
+      },
+    });
+
+    if (currentIndex >= 0) {
+      // no-op: action sheet doesn't support default selection; kept for readability.
+    }
   },
 
   onChooseHomeBase() {
@@ -1399,7 +1439,7 @@ Page({
           .catch((err) => {
             const code = err?.code || '';
             if (code === 'HOME_BASE_UPDATE_LIMITED') {
-              wx.showToast({ title: '今天只能修改一次位置（0点重置）', icon: 'none' });
+              wx.showToast({ title: '今天最多修改 3 次位置（0点重置）', icon: 'none' });
               return;
             }
             wx.showToast({ title: err?.message || '保存失败', icon: 'none' });

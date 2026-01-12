@@ -21,12 +21,10 @@ function formatTime(ts) {
 function decoratePost(p) {
   const createdAtMs = Number(p?.createdAtMs || 0) || Date.now();
   const expiresAtMs = Number(p?.expiresAtMs || 0) || createdAtMs + 30 * 24 * 3600 * 1000;
-  const radiusKm = Number(p?.radiusKm ?? 1) || 1;
   return {
     ...p,
     createdAtMs,
     expiresAtMs,
-    radiusKm: Number(radiusKm.toFixed(2)),
     pinned: !!p?.pinned,
     createdAtText: formatTime(createdAtMs),
     expiresAtText: formatTime(expiresAtMs),
@@ -42,8 +40,6 @@ function toFullUrl(url) {
 
 function normalizeServerPostItem(post) {
   const p = post || {};
-  const radiusM = Number(p.radiusM);
-  const radiusKm = Number.isFinite(radiusM) ? Math.max(0.1, radiusM / 1000) : 1;
   const images = Array.isArray(p.images) ? p.images : [];
   const urls = images.map((img) => toFullUrl(img?.url)).filter(Boolean);
 
@@ -51,7 +47,6 @@ function normalizeServerPostItem(post) {
     id: String(p.id || ''),
     text: typeof p.text === 'string' ? p.text : '',
     images: urls,
-    radiusKm,
     pinned: !!p.isPinned,
     createdAtMs: Number(p.createdAtMs || 0) || Date.now(),
     expiresAtMs: Number(p.expiresAtMs || 0) || Date.now() + 30 * 24 * 3600 * 1000,

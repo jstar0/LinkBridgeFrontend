@@ -344,7 +344,7 @@ function createLocalFeedRelationshipRequest(addresseeId, verificationMessage) {
  *
  * GET /v1/home-base
  * Response:
- * - homeBase: { lat: number, lng: number, lastUpdatedYmd: number, updatedAtMs: number } | null
+ * - homeBase: { lat: number, lng: number, radiusM?: number, lastUpdatedYmd: number, updatedAtMs: number } | null
  *
  * Error codes:
  * - TOKEN_INVALID / TOKEN_EXPIRED
@@ -365,23 +365,28 @@ function getLocalFeedHomeBase() {
  * Request body:
  * - lat: number (required)
  * - lng: number (required)
+ * - radiusM?: number (optional; account-level visibility radius in meters)
  *
  * Response:
- * - homeBase: { lat: number, lng: number, lastUpdatedYmd: number, updatedAtMs: number }
+ * - homeBase: { lat: number, lng: number, radiusM: number, lastUpdatedYmd: number, updatedAtMs: number }
  *
  * Error codes (backend main as of now):
  * - TOKEN_INVALID / TOKEN_EXPIRED
  * - VALIDATION_ERROR
- * - HOME_BASE_UPDATE_LIMITED (daily max 1 change; reset at 00:00)
+ * - HOME_BASE_UPDATE_LIMITED (daily max 3 location changes; reset at 00:00)
  */
-function setLocalFeedHomeBase({ name, lat, lng }) {
+function setLocalFeedHomeBase({ name, lat, lng, radiusM }) {
   const la = Number(lat);
   const ln = Number(lng);
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return Promise.reject({ code: 'VALIDATION', message: 'invalid lat/lng' });
-  return request('PUT', '/v1/home-base', { lat: la, lng: ln })
+  const rm = radiusM == null ? undefined : Number(radiusM);
+  const payload = { lat: la, lng: ln };
+  if (Number.isFinite(rm)) payload.radiusM = rm;
+  return request('PUT', '/v1/home-base', payload)
     .then((res) => res.homeBase)
     .catch((err) => {
       if (err?.statusCode !== 404 && err?.code !== 'NOT_FOUND') throw err;
+      // Legacy fallback does not support radius; location only.
       return request('PUT', '/v1/localfeed/home-base', { lat: la, lng: ln }).then((res) => res.homeBase);
     });
 }
@@ -394,7 +399,6 @@ function setLocalFeedHomeBase({ name, lat, lng }) {
  * - text?: string
  * - imageUrls?: string[]     // already-uploaded URLs (use api.uploadFile first)
  * - isPinned?: boolean
- * - radiusM?: number         // visibility radius (meters)
  * - expiresAtMs: number      // absolute expire time
  *
  * Response:
@@ -411,19 +415,11 @@ function createLocalFeedPost(payload) {
 
   const isPinned = typeof p.isPinned === 'boolean' ? p.isPinned : typeof p.pinned === 'boolean' ? p.pinned : undefined;
 
-  let radiusM = p.radiusM != null ? Number(p.radiusM) : NaN;
-  if (!Number.isFinite(radiusM) && p.radiusKm != null) {
-    const km = Number(p.radiusKm);
-    if (Number.isFinite(km)) radiusM = Math.round(km * 1000);
-  }
-  if (!Number.isFinite(radiusM)) radiusM = undefined;
-
   const imageUrls = Array.isArray(p.imageUrls) ? p.imageUrls : Array.isArray(p.images) ? p.images : [];
 
   const mainPayload = {
     text,
     imageUrls: (imageUrls || []).map((u) => String(u || '').trim()).filter(Boolean),
-    radiusM,
     expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : undefined,
     isPinned,
   };
@@ -431,7 +427,8 @@ function createLocalFeedPost(payload) {
   const legacyPayload = {
     text,
     images: (imageUrls || []).map((u) => String(u || '').trim()).filter(Boolean),
-    radiusKm: Number.isFinite(radiusM) ? radiusM / 1000 : undefined,
+    // Legacy API requires a radius; keep a reasonable default (1.1km) while hiding the concept from UI.
+    radiusKm: 1.1,
     expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : undefined,
     pinned: !!isPinned,
   };

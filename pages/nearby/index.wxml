@@ -41,7 +41,7 @@
     <scroll-view wx:else class="publish-view" scroll-y enhanced>
       <view class="publish-page">
         <view wx:if="{{needHomeBase}}" class="alert-card">
-          <view class="alert-card__title">首次使用需要设置固定地址点位</view>
+          <view class="alert-card__title">首次使用需要设置我的位置</view>
           <view class="alert-card__desc">设置后，你的头像点位才会出现在地图上，也才能发布内容。</view>
           <view class="alert-card__hint">请在下方「我的位置」中点击按钮进行设置</view>
           <view wx:if="{{!isLoggedIn}}" class="hint">请先登录后设置地址</view>
@@ -65,7 +65,11 @@
           <view class="publish-card__sub" wx:if="{{homeBase}}">
             已设置：{{homeBase.name || '我的位置'}}（{{homeBase.latText}}, {{homeBase.lngText}}）
           </view>
-          <view class="publish-card__sub" wx:else>未设置。首次使用本地信息流需设置一个固定地址点位。</view>
+          <view class="publish-card__sub" wx:else>未设置。首次使用本地信息流需要先设置我的位置。</view>
+
+          <view class="publish-card__sub" wx:if="{{homeBase}}">
+            可见范围：{{homeBase.radiusText}}
+          </view>
 
           <view class="publish-card__actions">
             <t-button size="small" variant="outline" theme="default" bind:tap="onSetHomeBaseToCurrent" disabled="{{!isLoggedIn}}">
@@ -73,6 +77,9 @@
             </t-button>
             <t-button size="small" variant="outline" theme="default" bind:tap="onChooseHomeBase" disabled="{{!isLoggedIn}}">
               地图选点
+            </t-button>
+            <t-button size="small" theme="primary" variant="outline" bind:tap="onChooseHomeBaseRadius" disabled="{{!isLoggedIn || !homeBase}}">
+              设置范围
             </t-button>
           </view>
           <view wx:if="{{!isLoggedIn}}" class="hint">请先登录后设置地址</view>
@@ -93,7 +100,7 @@
                 <view wx:if="{{item.pinned}}" class="my-post__pin">置顶</view>
               </view>
               <view class="my-post__meta">
-                半径 {{item.radiusKm}}km · 有效至 {{item.expiresAtText}}
+                有效至 {{item.expiresAtText}}
               </view>
             </view>
           </view>
@@ -123,7 +130,7 @@
           <view wx:for="{{selectedUserPosts}}" wx:key="id" class="preview__item">
             <view class="preview__text">{{item.text || '（图片）'}}</view>
             <view class="preview__meta">
-              半径 {{item.radiusKm}}km · 有效至 {{item.expiresAtText}}
+              有效至 {{item.expiresAtText}}
             </view>
           </view>
         </view>
@@ -213,17 +220,7 @@
           />
         </view>
 
-        <view class="publish__row">
-          <view class="publish__label">可见半径（km）</view>
-          <input
-            class="publish__input"
-            type="number"
-            value="{{draft.radiusKm}}"
-            placeholder="例如 1"
-            bindinput="onRadiusKmInput"
-            disabled="{{!isLoggedIn}}"
-          />
-        </view>
+        <view class="hint">可见范围由「我的位置」决定（账号级设置）</view>
 
         <view class="publish__row">
           <view class="publish__label">置顶</view>
