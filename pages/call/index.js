@@ -51,6 +51,20 @@ function showModal(options) {
   });
 }
 
+function setAudioRoute({ speakerOn }) {
+  try {
+    if (typeof wx?.setInnerAudioOption !== 'function') return false;
+    wx.setInnerAudioOption({
+      obeyMuteSwitch: false,
+      // `speakerOn=false` prefers earpiece/headset; `true` plays via speaker.
+      speakerOn: !!speakerOn,
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function makeWavHeader({ numChannels, sampleRate, bitsPerSample, dataSize }) {
   const blockAlign = (numChannels * bitsPerSample) / 8;
   const byteRate = sampleRate * blockAlign;
@@ -222,8 +236,28 @@ Page({
   },
 
   onToggleSpeaker() {
-    this.setData({ speakerOn: !this.data.speakerOn });
-    // TODO: Implement actual speaker toggle logic
+    const next = !this.data.speakerOn;
+
+    // Turning on speaker greatly increases the risk of echo/feedback (buzz) because mic may re-capture playback.
+    if (next) {
+      showModal({
+        title: '开启外放？',
+        content: '外放可能导致滋滋声/回声，建议使用听筒或戴耳机。仍要开启外放吗？',
+        confirmText: '开启外放',
+        cancelText: '取消',
+      }).then((res) => {
+        if (!res?.confirm) return;
+        this.setData({ speakerOn: true }, () => {
+          const ok = setAudioRoute({ speakerOn: true });
+          if (!ok) wx.showToast({ title: '当前环境不支持切换外放', icon: 'none' });
+        });
+      });
+      return;
+    }
+
+    this.setData({ speakerOn: false }, () => {
+      setAudioRoute({ speakerOn: false });
+    });
   },
 
   onSwitchCamera() {
@@ -378,6 +412,15 @@ Page({
     }
 
     this.startedAudio = true;
+
+    // Default to earpiece/headset to reduce acoustic feedback (buzz).
+    // Users can manually enable speaker from UI if needed.
+    try {
+      if (this.data.speakerOn) this.setData({ speakerOn: false });
+    } catch (e) {
+      // ignore
+    }
+    setAudioRoute({ speakerOn: false });
 
     Promise.resolve()
       .then(() =>
@@ -598,7 +641,8 @@ Page({
     this.activePlayerIdx = 0;
 
     try {
-      wx.setInnerAudioOption({ obeyMuteSwitch: false });
+      // Keep in sync with UI speaker state (defaults to earpiece/headset).
+      setAudioRoute({ speakerOn: !!this.data.speakerOn });
     } catch (e) {
       // ignore
     }
