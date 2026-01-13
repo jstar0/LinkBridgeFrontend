@@ -2376,8 +2376,13 @@ nacl.setPRNG = function(fn) {
       cleanup(v);
     });
   } else if (typeof require !== 'undefined') {
-    // Node.js.
-    crypto = require('crypto');
+    // Node.js (or CommonJS-like env). In WeChat Mini Program `require` exists but Node's `crypto` module does not.
+    // Keep this branch safe by swallowing the require failure and letting the app provide a PRNG via `nacl.setPRNG`.
+    try {
+      crypto = require('crypto');
+    } catch (e) {
+      crypto = null;
+    }
     if (crypto && crypto.randomBytes) {
       nacl.setPRNG(function(x, n) {
         var i, v = crypto.randomBytes(n);
