@@ -788,22 +788,32 @@ Page({
         const ext = String(raw.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
         const canOpen = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'].includes(ext);
 
-        // For formats WeChat can't open, avoid showing "cannot open" error. Download success is still valuable.
-        if (!canOpen) {
-          wx.showToast({ title: '已下载', icon: 'none' });
-          return;
-        }
+        // Persist the downloaded temp file into app storage so it's not reclaimed by the system.
+        // This is the closest to "save to local" available in Mini Program sandbox.
+        const saveAndMaybeOpen = () =>
+          new Promise((resolve) => {
+            if (typeof wx?.saveFile !== 'function') {
+              resolve({ saved: false, savedFilePath: filePath });
+              return;
+            }
+            wx.saveFile({
+              tempFilePath: filePath,
+              success: (r) => resolve({ saved: true, savedFilePath: r?.savedFilePath || filePath }),
+              fail: () => resolve({ saved: false, savedFilePath: filePath }),
+            });
+          }).then(({ savedFilePath }) => {
+            if (!canOpen) {
+              wx.showToast({ title: '已保存到本地', icon: 'none' });
+              return;
+            }
+            wx.openDocument({
+              filePath: savedFilePath,
+              showMenu: true,
+              fail: () => wx.showToast({ title: '已保存到本地（微信暂不支持打开）', icon: 'none' }),
+            });
+          });
 
-        wx.openDocument({
-          filePath,
-          showMenu: true,
-          success: () => {
-            // opened
-          },
-          fail: () => {
-            wx.showToast({ title: '已下载（微信暂不支持打开此格式）', icon: 'none' });
-          },
-        });
+        saveAndMaybeOpen().catch(() => null);
       },
       fail: () => {
         wx.hideLoading();
