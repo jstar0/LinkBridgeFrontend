@@ -616,11 +616,16 @@ Page({
         const filePath = file?.tempFilePath || '';
         if (!filePath) throw new Error('missing file');
         wx.showLoading({ title: '上传中...' });
-        return api.uploadFile(filePath).then((up) => ({ up }));
+        // WeChat image pickers usually do not provide a stable "original filename".
+        // Use a friendly name instead of server-side randomized storage name.
+        const rawExt = String(filePath.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
+        const ext = rawExt && /^[a-z0-9]{1,10}$/.test(rawExt) ? rawExt : 'jpg';
+        const friendlyName = `图片.${ext}`;
+        return api.uploadFile(filePath, friendlyName).then((up) => ({ up, friendlyName }));
       })
-      .then(({ up }) => {
+      .then(({ up, friendlyName }) => {
         const meta = {
-          name: up?.name || 'image',
+          name: friendlyName || '图片',
           sizeBytes: up?.sizeBytes || 0,
           url: up?.url || '',
         };
@@ -712,11 +717,13 @@ Page({
           .then(({ path, name }) => {
             if (!path) throw new Error('missing file');
             wx.showLoading({ title: '上传中...' });
-            return api.uploadFile(path, name);
+            const originalName = String(name || '').trim();
+            return api.uploadFile(path, originalName).then((up) => ({ up, originalName }));
           })
-          .then((up) => {
+          .then(({ up, originalName }) => {
             const meta = {
-              name: up?.name || 'file',
+              // Keep the user's original file name for display and for forwarding via `wx.shareFileMessage`.
+              name: originalName || up?.name || '文件',
               sizeBytes: up?.sizeBytes || 0,
               url: up?.url || '',
             };
