@@ -699,6 +699,45 @@ Page({
       });
   },
 
+  onDeleteMyPost(e) {
+    if (!api.isLoggedIn()) {
+      wx.navigateTo({ url: '/pages/login/login' });
+      return;
+    }
+
+    const postId = String(e?.currentTarget?.dataset?.id || '').trim();
+    if (!postId) return;
+
+    const title = String(e?.currentTarget?.dataset?.title || '').trim();
+    const hint = title ? `「${title.slice(0, 40)}」` : '这条发布';
+
+    wx.showModal({
+      title: '删除发布',
+      content: `确定要删除${hint}吗？删除后将对附近的人不可见。`,
+      confirmText: '删除',
+      cancelText: '取消',
+      confirmColor: '#e34d59',
+      success: (res) => {
+        if (!res?.confirm) return;
+
+        wx.showLoading({ title: '删除中...' });
+        api
+          .deleteLocalFeedPost(postId)
+          .then((r) => {
+            if (r?.deleted === false) throw new Error('delete failed');
+          })
+          .then(() => {
+            wx.showToast({ title: '已删除', icon: 'none' });
+            return this.refreshMyPosts();
+          })
+          .catch((err) => {
+            wx.showToast({ title: err?.message || '删除失败', icon: 'none' });
+          })
+          .finally(() => safeHideLoading());
+      },
+    });
+  },
+
   onMarkerTap(e) {
     const id = Number(e?.detail?.markerId);
     const meta = this.data.markerMeta?.[id];

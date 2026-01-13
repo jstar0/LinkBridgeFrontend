@@ -97,7 +97,19 @@
             <view wx:for="{{myPosts}}" wx:key="id" class="my-post">
               <view class="my-post__head">
                 <view class="my-post__title">{{item.text || '（图片）'}}</view>
-                <view wx:if="{{item.pinned}}" class="my-post__pin">置顶</view>
+                <view class="my-post__actions">
+                  <view wx:if="{{item.pinned}}" class="my-post__pin">置顶</view>
+                  <t-button
+                    size="small"
+                    theme="danger"
+                    variant="text"
+                    bind:tap="onDeleteMyPost"
+                    data-id="{{item.id}}"
+                    data-title="{{item.text || '（图片）'}}"
+                  >
+                    删除
+                  </t-button>
+                </view>
               </view>
               <view class="my-post__meta">
                 有效至 {{item.expiresAtText}}
