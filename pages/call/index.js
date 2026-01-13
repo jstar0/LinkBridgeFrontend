@@ -133,7 +133,8 @@ Page({
   // Receive buffer: merge a few PCM frames into a longer WAV chunk to reduce boundary clicks.
   jitterBuffer: [], // base64 frames (PCM16LE)
   // Low-latency mode (phone-first): smaller chunks and minimal prebuffer.
-  batchSize: 2, // 2 * ~160ms ~= ~320ms per chunk (lower stutter; still low latency)
+  // Note: actual frame duration depends on recorder `frameSize` (KB). Keep chunks ~200-350ms for stability.
+  batchSize: 4,
   prebufferSegments: 1, // start as soon as we have the first chunk
   // Crossfade tends to drift in Mini Program runtimes (timer jitter) and can produce buzz/comb artifacts.
   // Keep it off by default for stability; we can re-enable later if needed.
@@ -459,12 +460,13 @@ Page({
         });
 
         // Real-time PCM frames (16kHz mono) for low-cost relay via backend WS.
+        // Use smaller frameSize (KB) to reduce inherent capture latency.
         recorder.start({
           duration: 10 * 60 * 1000,
           sampleRate: 16000,
           numberOfChannels: 1,
           format: 'PCM',
-          frameSize: 5,
+          frameSize: 2,
         });
 
         this.setStatus('in_call', '通话中');
@@ -514,8 +516,14 @@ Page({
       this.writeMergedAudioFrames(framesToMerge);
     }
 
-    // Flush partial frames soon to reduce initial silence and reduce underflow gaps.
-    this.scheduleJitterFlush();
+    // Flush partial frames only when needed:
+    // - before playout starts (reduce initial silence)
+    // - or when we're at risk of underflow (no queued segments while current is playing)
+    const needStart = !this.hasEverStartedPlayout && !this._currentSeg && (this.segmentQueue?.length || 0) === 0;
+    const needUnderflowGuard = this.hasEverStartedPlayout && (this.segmentQueue?.length || 0) === 0;
+    if ((needStart || needUnderflowGuard) && this.jitterBuffer.length > 0 && this.jitterBuffer.length < this.batchSize) {
+      this.scheduleJitterFlush();
+    }
   },
 
   scheduleJitterFlush() {
@@ -526,21 +534,21 @@ Page({
     this._jitterFlushTimer = setTimeout(() => {
       this._jitterFlushTimer = null;
 
-      // For first audible output, allow 1 frame to reduce start latency.
-      // After playout starts, prefer at least 2 frames per chunk to reduce boundary artifacts.
-      const minFrames = this.hasEverStartedPlayout ? 2 : 1;
+      // For first audible output, keep it small but avoid too tiny chunks (stutter risk).
+      const minFrames = this.hasEverStartedPlayout ? 2 : 2;
       const available = this.jitterBuffer.length;
       if (available < minFrames) {
         if (available > 0) this.scheduleJitterFlush();
         return;
       }
 
+      // Before playout, flushing 2 frames usually gives a smoother start. During call, allow up to batchSize.
       const n = Math.min(this.batchSize, available);
       const frames = this.jitterBuffer.splice(0, n);
       this.writeMergedAudioFrames(frames);
 
       if (this.jitterBuffer.length > 0) this.scheduleJitterFlush();
-    }, 80);
+    }, 120);
   },
 
   stopPlayout() {
