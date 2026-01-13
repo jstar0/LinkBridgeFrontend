@@ -773,47 +773,58 @@ Page({
     const fullUrl = this.getFileUrl({ url });
     if (!fullUrl) return;
 
+    const sys = (() => {
+      try {
+        return typeof wx?.getSystemInfoSync === 'function' ? wx.getSystemInfoSync() : {};
+      } catch (e) {
+        return {};
+      }
+    })();
+    const platform = String(sys?.platform || '').toLowerCase();
+    const isMobile = platform === 'ios' || platform === 'android';
+
+    if (!isMobile) {
+      wx.showToast({ title: 'PC/开发者工具暂不支持分享文件，请在手机上操作', icon: 'none' });
+      return;
+    }
+
+    if (typeof wx?.shareFileMessage !== 'function') {
+      wx.showToast({ title: '当前微信版本不支持分享文件', icon: 'none' });
+      return;
+    }
+
+    const raw = name || url || fullUrl;
+    const ext = String(raw.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
+    const safeExt = ext && /^[a-z0-9]{1,10}$/.test(ext) ? ext : 'bin';
+    const fileName = name || (safeExt ? `文件.${safeExt}` : '文件');
+
+    // Download directly into USER_DATA_PATH with a proper suffix (Android is picky about extensions).
+    const targetPath = `${wx.env.USER_DATA_PATH}/lb_share_${Date.now()}_${Math.floor(Math.random() * 1e6)}.${safeExt}`;
+
     wx.showLoading({ title: '下载中...' });
     wx.downloadFile({
       url: fullUrl,
+      filePath: targetPath,
       success: (res) => {
         wx.hideLoading();
-        const filePath = res?.tempFilePath;
-        if (!filePath) {
+        const localPath = res?.filePath || res?.tempFilePath || '';
+        if (!localPath) {
           wx.showToast({ title: '下载失败', icon: 'none' });
           return;
         }
 
-        const raw = name || url || fullUrl;
-        const ext = String(raw.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
-        const fileName = name || (ext ? `文件.${ext}` : '文件');
-
-        // Persist the downloaded temp file into app storage so it's not reclaimed by the system.
-        // Then share it to WeChat chat (consistent UX for all file types).
-        const saveThenShare = () =>
-          new Promise((resolve) => {
-            if (typeof wx?.saveFile !== 'function') {
-              resolve({ savedFilePath: filePath });
+        wx.shareFileMessage({
+          filePath: localPath,
+          fileName,
+          fail: (err) => {
+            const msg = String(err?.errMsg || '').toLowerCase();
+            if (msg.includes('not supported') || msg.includes('not support')) {
+              wx.showToast({ title: '当前环境不支持分享文件', icon: 'none' });
               return;
             }
-            wx.saveFile({
-              tempFilePath: filePath,
-              success: (r) => resolve({ savedFilePath: r?.savedFilePath || filePath }),
-              fail: () => resolve({ savedFilePath: filePath }),
-            });
-          }).then(({ savedFilePath }) => {
-            if (typeof wx?.shareFileMessage !== 'function') {
-              wx.showToast({ title: '当前微信版本不支持分享文件', icon: 'none' });
-              return;
-            }
-            wx.shareFileMessage({
-              filePath: savedFilePath,
-              fileName,
-              fail: () => wx.showToast({ title: '分享失败', icon: 'none' }),
-            });
-          });
-
-        saveThenShare().catch(() => null);
+            wx.showToast({ title: '分享失败', icon: 'none' });
+          },
+        });
       },
       fail: () => {
         wx.hideLoading();
