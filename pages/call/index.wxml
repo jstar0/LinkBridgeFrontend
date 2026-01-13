@@ -21,9 +21,15 @@
     <t-button wx:if="{{showCancel}}" class="call-btn call-btn-hangup" theme="danger" shape="circle" icon="call-off" bind:tap="onTapCancel" />
 
     <!-- In call: Mute + Hangup + Speaker -->
-    <t-button wx:if="{{showHangup}}" class="call-btn" theme="default" shape="circle" icon="{{muted ? 'mic-off' : 'mic'}}" bind:tap="onToggleMute" />
+    <view wx:if="{{showHangup}}" class="call-action" catchtap="onToggleMute">
+      <t-button class="call-btn" theme="default" shape="circle" icon="{{muted ? 'microphone-1' : 'microphone'}}" />
+      <view class="call-action__label">{{muted ? '已静音' : '静音'}}</view>
+    </view>
     <t-button wx:if="{{showHangup}}" class="call-btn call-btn-hangup" theme="danger" shape="circle" icon="call-off" bind:tap="onTapHangup" />
-    <t-button wx:if="{{showHangup}}" class="call-btn" theme="default" shape="circle" icon="{{speakerOn ? 'sound' : 'sound-off'}}" bind:tap="onToggleSpeaker" />
+    <view wx:if="{{showHangup}}" class="call-action" catchtap="onToggleSpeaker">
+      <t-button class="call-btn" theme="default" shape="circle" icon="{{speakerOn ? 'sound' : 'sound-mute'}}" />
+      <view class="call-action__label">{{speakerOn ? '外放' : '听筒'}}</view>
+    </view>
   </view>
 </view>
 
@@ -41,7 +47,7 @@
   <!-- Top controls (can hide) -->
   <view wx:if="{{controlsVisible}}" class="top-controls">
     <view class="control-btn" catchtap="onToggleMute">
-      <t-icon name="{{muted ? 'mic-off' : 'mic'}}" size="48rpx" color="#fff" />
+      <t-icon name="{{muted ? 'microphone-1' : 'microphone'}}" size="48rpx" color="#fff" />
     </view>
     <view class="control-btn" catchtap="onSwitchCamera">
       <t-icon name="camera-rotate" size="48rpx" color="#fff" />
@@ -63,10 +69,10 @@
       <t-icon name="menu" size="56rpx" color="#fff" />
     </view>
     <view wx:if="{{showHangup}}" class="control-btn" catchtap="onToggleMute">
-      <t-icon name="{{muted ? 'mic-off' : 'mic'}}" size="56rpx" color="#fff" />
+      <t-icon name="{{muted ? 'microphone-1' : 'microphone'}}" size="56rpx" color="#fff" />
     </view>
     <view wx:if="{{showHangup}}" class="control-btn" catchtap="onToggleSpeaker">
-      <t-icon name="{{speakerOn ? 'sound' : 'sound-off'}}" size="56rpx" color="#fff" />
+      <t-icon name="{{speakerOn ? 'sound' : 'sound-mute'}}" size="56rpx" color="#fff" />
     </view>
     <view wx:if="{{showHangup}}" class="control-btn hangup" catchtap="onTapHangup">
       <t-icon name="call-off" size="56rpx" color="#fff" />

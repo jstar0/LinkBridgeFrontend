@@ -231,8 +231,9 @@ Page({
   },
 
   onToggleMute() {
-    this.setData({ muted: !this.data.muted });
-    // TODO: Implement actual mute logic
+    const next = !this.data.muted;
+    this.setData({ muted: next });
+    wx.showToast({ title: next ? '已静音' : '已取消静音', icon: 'none' });
   },
 
   onToggleSpeaker() {
@@ -444,7 +445,11 @@ Page({
         recorder.onFrameRecorded((e) => {
           const buf = e?.frameBuffer;
           if (!buf) return;
-          const b64 = wx.arrayBufferToBase64(buf);
+
+          // Keep frame cadence stable, but when muted, send silence (all-zero PCM) instead of real mic data.
+          const muted = !!this.data.muted;
+          const payloadBuf = muted ? new ArrayBuffer(buf.byteLength) : buf;
+          const b64 = wx.arrayBufferToBase64(payloadBuf);
           api.sendAudioFrame(callId, b64);
         });
 
