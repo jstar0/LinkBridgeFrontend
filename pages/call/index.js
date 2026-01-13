@@ -110,17 +110,20 @@ Page({
 
   wsHandler: null,
   recorder: null,
-  playingAudio: null,
-  playQueue: [],
+  audioPlayers: null,
+  activePlayerIdx: 0,
+  segmentQueue: [], // { path, durationMs }
   playIndex: 0,
-  currentPlayPath: '',
   startedAudio: false,
-  // Jitter buffer: accumulate frames before playing
-  jitterBuffer: [],
-  jitterBufferSize: 3, // Wait for 3 frames before starting playback
-  jitterBufferStarted: false,
-  // Batch merge: combine multiple frames into one file
-  batchSize: 4, // Merge 4 frames into one WAV file
+  hasEverStartedPlayout: false,
+  // Receive buffer: merge a few PCM frames into a longer WAV chunk to reduce boundary clicks.
+  jitterBuffer: [], // base64 frames (PCM16LE)
+  batchSize: 6, // 6 * ~160ms ~= ~1s per chunk (better quality, fewer boundaries)
+  prebufferSegments: 2, // wait for >=2 chunks before starting playback to avoid gaps
+  crossfadeMs: 120,
+  overlapMs: 80,
+  _crossfadeTimer: null,
+  _crossfadeVolumeTimer: null,
   // Video call
   cameraContext: null,
   videoFrameTimer: null,
@@ -429,7 +432,7 @@ Page({
   stopRealtimeAudio() {
     this.startedAudio = false;
     this.jitterBuffer = [];
-    this.jitterBufferStarted = false;
+    this.hasEverStartedPlayout = false;
 
     // Stop video capture
     this.stopVideoCapture();
@@ -443,51 +446,150 @@ Page({
       this.recorder = null;
     }
 
-    if (this.playingAudio) {
-      try {
-        this.playingAudio.stop();
-        this.playingAudio.destroy();
-      } catch (e) {
-        // ignore
-      }
-      this.playingAudio = null;
-    }
-
-    // best-effort cleanup current file
-    const cur = this.currentPlayPath;
-    this.currentPlayPath = '';
-    if (cur) {
-      try {
-        wx.getFileSystemManager().unlink({ filePath: cur });
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    this.playQueue = [];
+    this.stopPlayout();
     return Promise.resolve();
   },
 
   enqueueIncomingAudioFrame(base64Data) {
-    // Add to jitter buffer first
     this.jitterBuffer.push(base64Data);
 
-    // Wait until we have enough frames to start (jitter buffer)
-    if (!this.jitterBufferStarted) {
-      if (this.jitterBuffer.length < this.jitterBufferSize) {
-        return; // Keep buffering
+    // Merge whenever we have enough frames.
+    while (this.jitterBuffer.length >= this.batchSize) {
+      const framesToMerge = this.jitterBuffer.splice(0, this.batchSize);
+      this.writeMergedAudioFrames(framesToMerge);
+    }
+  },
+
+  stopPlayout() {
+    // Stop crossfade timers
+    if (this._crossfadeTimer) {
+      clearTimeout(this._crossfadeTimer);
+      this._crossfadeTimer = null;
+    }
+    if (this._crossfadeVolumeTimer) {
+      clearInterval(this._crossfadeVolumeTimer);
+      this._crossfadeVolumeTimer = null;
+    }
+
+    // Stop players
+    const players = Array.isArray(this.audioPlayers) ? this.audioPlayers : [];
+    players.forEach((p) => {
+      try {
+        p.stop();
+        p.destroy();
+      } catch (e) {
+        // ignore
       }
-      this.jitterBufferStarted = true;
+    });
+    this.audioPlayers = null;
+
+    // Cleanup queued files
+    const fs = wx.getFileSystemManager();
+    const queue = Array.isArray(this.segmentQueue) ? this.segmentQueue : [];
+    queue.forEach((seg) => {
+      const path = seg?.path || '';
+      if (!path) return;
+      try {
+        fs.unlink({ filePath: path, fail: () => null });
+      } catch (e) {
+        // ignore
+      }
+    });
+    this.segmentQueue = [];
+
+    // Cleanup current segment file (if any)
+    const curPath = String(this._currentSeg?.path || '').trim();
+    if (curPath) {
+      try {
+        fs.unlink({ filePath: curPath, fail: () => null });
+      } catch (e) {
+        // ignore
+      }
+    }
+    this._currentSeg = null;
+  },
+
+  ensurePlayers() {
+    if (Array.isArray(this.audioPlayers) && this.audioPlayers.length === 2) return;
+
+    // Use WebAudio backend if available (better for frequent playback).
+    const mk = () => {
+      try {
+        return wx.createInnerAudioContext({ useWebAudioImplement: true });
+      } catch (e) {
+        return wx.createInnerAudioContext();
+      }
+    };
+
+    this.audioPlayers = [mk(), mk()];
+    this.activePlayerIdx = 0;
+
+    try {
+      wx.setInnerAudioOption({ obeyMuteSwitch: false });
+    } catch (e) {
+      // ignore
     }
 
-    // Batch merge: wait for batchSize frames before writing
-    if (this.jitterBuffer.length < this.batchSize) {
-      return;
+    // Defensive defaults + end handlers (in case timing-based crossfade misses).
+    this.audioPlayers.forEach((player, idx) => {
+      if (!player) return;
+      player.autoplay = false;
+      player.loop = false;
+
+      player.onEnded(() => {
+        // If a segment ended unexpectedly (e.g., crossfade scheduled too late), advance immediately.
+        if (!this.startedAudio) return;
+        const cur = this._currentSeg;
+        if (!cur || cur.playerIdx !== idx) return;
+
+        try {
+          wx.getFileSystemManager().unlink({ filePath: cur.path, fail: () => null });
+        } catch (e) {
+          // ignore
+        }
+
+        this._currentSeg = null;
+        this.kickPlayout();
+      });
+
+      player.onError(() => null);
+    });
+  },
+
+  applyEdgeFadePcm16le(pcmBytes, sampleRate, fadeMs) {
+    const buf = pcmBytes instanceof Uint8Array ? pcmBytes : new Uint8Array(0);
+    const sr = Number(sampleRate || 0) || 16000;
+    const ms = Number(fadeMs || 0) || 0;
+    if (buf.byteLength < 4) return buf;
+    if (ms <= 0) return buf;
+
+    const totalSamples = Math.floor(buf.byteLength / 2);
+    const fadeSamples = Math.min(totalSamples, Math.max(1, Math.floor((sr * ms) / 1000)));
+    if (fadeSamples <= 1) return buf;
+
+    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+
+    const scaleSample = (idx, gain) => {
+      const off = idx * 2;
+      if (off + 2 > view.byteLength) return;
+      const s = view.getInt16(off, true);
+      const v = Math.max(-32768, Math.min(32767, Math.round(s * gain)));
+      view.setInt16(off, v, true);
+    };
+
+    // Fade-in
+    for (let i = 0; i < fadeSamples; i++) {
+      scaleSample(i, i / fadeSamples);
     }
 
-    // Take batchSize frames and merge them
-    const framesToMerge = this.jitterBuffer.splice(0, this.batchSize);
-    this.writeMergedAudioFrames(framesToMerge);
+    // Fade-out
+    for (let i = 0; i < fadeSamples; i++) {
+      const idx = totalSamples - fadeSamples + i;
+      if (idx < 0) continue;
+      scaleSample(idx, (fadeSamples - i) / fadeSamples);
+    }
+
+    return buf;
   },
 
   writeMergedAudioFrames(base64Frames) {
@@ -502,6 +604,9 @@ Page({
       mergedPcm.set(arr, offset);
       offset += arr.byteLength;
     }
+
+    // Apply a short fade at chunk edges to avoid click/pop when starting/ending playback.
+    this.applyEdgeFadePcm16le(mergedPcm, 16000, 8);
 
     // Create WAV header for merged data
     const header = makeWavHeader({
@@ -521,10 +626,10 @@ Page({
       fs.writeFile({
         filePath,
         data: wav.buffer,
-        encoding: 'binary',
         success: () => {
-          this.playQueue.push(filePath);
-          this.kickPlayQueue();
+          const durationMs = Math.max(1, Math.round((totalSize / (16000 * 2)) * 1000));
+          this.segmentQueue.push({ path: filePath, durationMs });
+          this.kickPlayout();
         },
         fail: () => null,
       });
@@ -533,41 +638,139 @@ Page({
     }
   },
 
-  kickPlayQueue() {
+  kickPlayout() {
     if (!this.startedAudio) return;
+    this.ensurePlayers();
 
-    if (!this.playingAudio) {
-      this.playingAudio = wx.createInnerAudioContext();
-      this.playingAudio.autoplay = false;
-      this.playingAudio.onEnded(() => {
-        const done = this.currentPlayPath;
-        this.currentPlayPath = '';
-        if (done) {
-          try {
-            wx.getFileSystemManager().unlink({ filePath: done });
-          } catch (e) {
-            // ignore
-          }
-        }
-        this.kickPlayQueue();
-      });
-      this.playingAudio.onError(() => {
-        // drop current and continue
-        this.kickPlayQueue();
-      });
+    // If nothing is playing yet, wait for enough buffered chunks.
+    if (!this._currentSeg && !this.hasEverStartedPlayout) {
+      if ((this.segmentQueue?.length || 0) < this.prebufferSegments) return;
     }
 
-    if (this.currentPlayPath) return;
-    const next = this.playQueue.shift();
-    if (!next) return;
+    if (!this._currentSeg) {
+      const next = this.segmentQueue.shift();
+      if (!next?.path) return;
+      this.startSegmentAsCurrent(next);
+      return;
+    }
 
-    this.currentPlayPath = next;
+    // Current is playing; if we haven't scheduled crossfade and there is a next segment, schedule it.
+    if (!this._crossfadeTimer && (this.segmentQueue?.length || 0) > 0) {
+      const cur = this._currentSeg;
+      const delay = Math.max(0, Number(cur.durationMs || 0) - this.overlapMs);
+      this._crossfadeTimer = setTimeout(() => {
+        this._crossfadeTimer = null;
+        this.crossfadeToNext();
+      }, delay);
+    }
+  },
+
+  startSegmentAsCurrent(seg) {
+    const s = seg || {};
+    const path = String(s.path || '').trim();
+    const durationMs = Number(s.durationMs || 0) || 0;
+    if (!path || durationMs <= 0) return;
+
+    const idx = Number(this.activePlayerIdx || 0) || 0;
+    const player = this.audioPlayers[idx];
+    if (!player) return;
+
+    this._currentSeg = { path, durationMs, playerIdx: idx };
+    this.hasEverStartedPlayout = true;
+
     try {
-      this.playingAudio.src = next;
-      this.playingAudio.play();
+      player.stop();
     } catch (e) {
-      this.currentPlayPath = '';
+      // ignore
     }
+
+    try {
+      player.volume = 1;
+      player.src = path;
+      player.play();
+    } catch (e) {
+      // ignore
+    }
+
+    // Ensure scheduling for the next segment.
+    this.kickPlayout();
+  },
+
+  crossfadeToNext() {
+    if (!this.startedAudio) return;
+    if (!this._currentSeg) return;
+    if (!this.segmentQueue || this.segmentQueue.length === 0) return;
+
+    const curSeg = this._currentSeg;
+    const curIdx = Number(curSeg.playerIdx || 0) || 0;
+    const nextIdx = curIdx === 0 ? 1 : 0;
+    const curPlayer = this.audioPlayers?.[curIdx];
+    const nextPlayer = this.audioPlayers?.[nextIdx];
+    if (!curPlayer || !nextPlayer) return;
+
+    const nextSeg = this.segmentQueue.shift();
+    const nextPath = String(nextSeg?.path || '').trim();
+    const nextDurationMs = Number(nextSeg?.durationMs || 0) || 0;
+    if (!nextPath || nextDurationMs <= 0) return;
+
+    // Start next segment quietly, then fade in/out.
+    try {
+      nextPlayer.stop();
+    } catch (e) {
+      // ignore
+    }
+
+    try {
+      nextPlayer.volume = 0;
+      nextPlayer.src = nextPath;
+      nextPlayer.play();
+    } catch (e) {
+      // ignore
+    }
+
+    const fadeMs = Number(this.crossfadeMs || 0) || 120;
+    const steps = 6;
+    const stepMs = Math.max(12, Math.floor(fadeMs / steps));
+    let step = 0;
+
+    if (this._crossfadeVolumeTimer) {
+      clearInterval(this._crossfadeVolumeTimer);
+      this._crossfadeVolumeTimer = null;
+    }
+
+    this._crossfadeVolumeTimer = setInterval(() => {
+      step++;
+      const t = Math.min(1, step / steps);
+      try {
+        curPlayer.volume = Math.max(0, 1 - t);
+        nextPlayer.volume = Math.min(1, t);
+      } catch (e) {
+        // ignore
+      }
+
+      if (t >= 1) {
+        clearInterval(this._crossfadeVolumeTimer);
+        this._crossfadeVolumeTimer = null;
+
+        // Stop and cleanup current segment file.
+        try {
+          curPlayer.stop();
+        } catch (e) {
+          // ignore
+        }
+        try {
+          wx.getFileSystemManager().unlink({ filePath: curSeg.path });
+        } catch (e) {
+          // ignore
+        }
+
+        this.activePlayerIdx = nextIdx;
+        this._currentSeg = { path: nextPath, durationMs: nextDurationMs, playerIdx: nextIdx };
+
+        // Continue scheduling.
+        this.kickPlayout();
+      }
+    }, stepMs);
   },
 
   // Video call methods
