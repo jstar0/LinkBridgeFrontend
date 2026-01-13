@@ -133,15 +133,15 @@ Page({
   // Receive buffer: merge a few PCM frames into a longer WAV chunk to reduce boundary clicks.
   jitterBuffer: [], // base64 frames (PCM16LE)
   // Low-latency mode (phone-first): smaller chunks and minimal prebuffer.
-  batchSize: 1, // 1 * ~160ms ~= ~160ms per chunk (lowest latency; more boundaries)
-  prebufferSegments: 0, // start as soon as we have the first chunk
+  batchSize: 2, // 2 * ~160ms ~= ~320ms per chunk (lower stutter; still low latency)
+  prebufferSegments: 1, // start as soon as we have the first chunk
   // Crossfade tends to drift in Mini Program runtimes (timer jitter) and can produce buzz/comb artifacts.
   // Keep it off by default for stability; we can re-enable later if needed.
   enableCrossfade: false,
   crossfadeMs: 120,
   overlapMs: 80,
   // Keep latency bounded: if we fall behind, drop old buffered chunks to stay near-real-time.
-  maxQueueSegments: 2,
+  maxQueueSegments: 3,
   _jitterFlushTimer: null,
   _crossfadeTimer: null,
   _crossfadeVolumeTimer: null,
@@ -514,8 +514,8 @@ Page({
       this.writeMergedAudioFrames(framesToMerge);
     }
 
-    // When batchSize > 1, flush partial frames soon to reduce initial silence.
-    if (this.batchSize > 1) this.scheduleJitterFlush();
+    // Flush partial frames soon to reduce initial silence and reduce underflow gaps.
+    this.scheduleJitterFlush();
   },
 
   scheduleJitterFlush() {
@@ -540,7 +540,7 @@ Page({
       this.writeMergedAudioFrames(frames);
 
       if (this.jitterBuffer.length > 0) this.scheduleJitterFlush();
-    }, 40);
+    }, 80);
   },
 
   stopPlayout() {
