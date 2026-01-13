@@ -126,6 +126,7 @@ Page({
     peerProfileVisible: false,
     peerProfile: { id: '', username: '', displayName: '', avatarUrl: '/static/chat/avatar.png' },
     messages: [],
+    e2eeEnabled: false,
     e2eeReady: false,
     e2eeHint: '',
     burnEnabled: false,
@@ -173,9 +174,11 @@ Page({
       bottomBarHeight: getBottomBarBaseHeightPx(),
       bottomSpacer: getBottomBarBaseHeightPx(),
       burnStateById: loadBurnState(sessionId),
+      e2eeEnabled: false,
+      e2eeReady: !!e2ee.getSessionKey(sessionId),
+      e2eeHint: '',
+      burnEnabled: false,
     });
-
-    this.ensureE2EE();
 
     // Clear unread for this session when entering chat, even if user didn't come from the session list.
     if (typeof app?.setSessionUnread === 'function') app.setSessionUnread(sessionId, 0);
@@ -202,7 +205,7 @@ Page({
         if (res?.ready) {
           this.setData({ e2eeReady: true, e2eeHint: '' });
           this.rebuildVisibleMessages();
-          wx.showToast({ title: '加密通道已建立', icon: 'none' });
+          if (this.data.e2eeEnabled) wx.showToast({ title: '加密通道已建立', icon: 'none' });
         }
         return;
       }
@@ -404,8 +407,32 @@ Page({
   },
 
   onToggleBurn(e) {
-    const v = !!e?.detail?.value;
-    this.setData({ burnEnabled: v });
+    if (!this.data.e2eeEnabled) {
+      wx.showToast({ title: '请先开启端到端加密', icon: 'none' });
+      if (this.data.burnEnabled) this.setData({ burnEnabled: false });
+      return;
+    }
+
+    const hasSwitchValue = typeof e?.detail?.value === 'boolean';
+    const next = hasSwitchValue ? !!e.detail.value : !this.data.burnEnabled;
+    this.setData({ burnEnabled: next });
+  },
+
+  onToggleE2EE() {
+    const next = !this.data.e2eeEnabled;
+    if (!next) {
+      this.setData({ e2eeEnabled: false, e2eeHint: '', burnEnabled: false });
+      return;
+    }
+
+    this.setData({ e2eeEnabled: true }, () => {
+      this.ensureE2EE();
+      if (this.data.e2eeReady) {
+        wx.showToast({ title: '端到端加密已开启', icon: 'none' });
+      } else {
+        wx.showToast({ title: '端到端加密已开启，等待对方…', icon: 'none' });
+      }
+    });
   },
 
   afterMessagesUpdated() {
@@ -459,10 +486,20 @@ Page({
     const readAtMs = Date.now();
     const expireAtMs = readAtMs + Number(msg.burnAfterSec) * 1000;
     map[mid] = { readAtMs, expireAtMs, burned: false };
-    this.setData({ burnStateById: map });
-    saveBurnState(this.data.sessionId, map);
+    const nextMsgs = (this.data.messages || []).map((m) => {
+      if (!m) return m;
+      if (String(m?.messageId || '') !== mid) return m;
+      if (m.type !== 'text') return m;
+      if (!(Number(m.burnAfterSec || 0) > 0)) return m;
+      const remainingSec = Math.max(0, Math.ceil((expireAtMs - Date.now()) / 1000));
+      return { ...m, burnRead: true, burnRemainingSec: remainingSec };
+    });
 
-    this.tickBurnCountdowns();
+    this.setData({ burnStateById: map, messages: nextMsgs }, () => {
+      saveBurnState(this.data.sessionId, map);
+      this.ensureBurnTicker();
+      this.tickBurnCountdowns();
+    });
   },
 
   ensureBurnTicker() {
@@ -476,7 +513,7 @@ Page({
       return !!map?.[mid]?.readAtMs;
     });
     if (!need) return;
-    this._burnTicker = setInterval(() => this.tickBurnCountdowns(), 450);
+    this._burnTicker = setInterval(() => this.tickBurnCountdowns(), 1000);
   },
 
   teardownBurnTicker() {
@@ -535,8 +572,30 @@ Page({
     const content = (this.data.input || '').trim();
     if (!content) return;
 
-    this.setData({ input: '' });
+    const sid = this.data.sessionId;
+    if (!sid) return;
 
+    // Plaintext by default; E2EE is an explicit per-session toggle.
+    if (!this.data.e2eeEnabled) {
+      this.setData({ input: '' });
+      api
+        .sendTextMessage(sid, content)
+        .then((msg) => {
+          const myId = this.data.myUserId || api.getUser()?.id || '';
+          const vm = buildViewMessage(msg, myId, sid, this.data.burnStateById);
+          if (!vm) return;
+          const id = vm?.messageId || '';
+          if (id && this.data.messages.some((m) => m.messageId === id)) return;
+          this.setData({ messages: [...this.data.messages, vm] }, () => this.afterMessagesUpdated());
+          wx.nextTick(() => this.scrollToBottom());
+        })
+        .catch(() => {
+          wx.showToast({ title: '发送失败', icon: 'none' });
+        });
+      return;
+    }
+
+    // E2EE enabled: require a session key before sending encrypted text.
     if (!this.data.e2eeReady) {
       this.ensureE2EE();
       wx.showToast({ title: '加密通道建立中', icon: 'none' });
@@ -544,18 +603,19 @@ Page({
     }
 
     const burnAfter = this.data.burnEnabled ? Number(this.data.burnSeconds || DEFAULT_BURN_SECONDS) || DEFAULT_BURN_SECONDS : 0;
-    const enc = e2ee.encryptText(this.data.sessionId, content, burnAfter);
+    const enc = e2ee.encryptText(sid, content, burnAfter);
     if (!enc?.ok || !enc?.text) {
       this.ensureE2EE();
       wx.showToast({ title: '暂时无法加密发送', icon: 'none' });
       return;
     }
 
+    this.setData({ input: '' });
     api
-      .sendTextMessage(this.data.sessionId, enc.text)
+      .sendTextMessage(sid, enc.text)
       .then((msg) => {
         const myId = this.data.myUserId || api.getUser()?.id || '';
-        const vm = buildViewMessage(msg, myId, this.data.sessionId, this.data.burnStateById);
+        const vm = buildViewMessage(msg, myId, sid, this.data.burnStateById);
         if (!vm) return;
         const id = vm?.messageId || '';
         if (id && this.data.messages.some((m) => m.messageId === id)) return;

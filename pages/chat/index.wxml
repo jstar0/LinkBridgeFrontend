@@ -104,6 +104,9 @@
   <view class="more" bind:tap="onTapMore">
     <t-icon name="add" size="44rpx" color="#00000099" />
   </view>
+  <view class="tool-btn {{ e2eeEnabled ? 'tool-btn--active' : '' }}" bind:tap="onToggleE2EE">
+    <text>加密</text>
+  </view>
   <view class="input">
     <input
       value="{{ input }}"
@@ -121,6 +124,9 @@
       bindconfirm="sendMessage"
     />
   </view>
+  <view class="tool-btn tool-btn--burn {{ !e2eeEnabled ? 'tool-btn--disabled' : '' }} {{ burnEnabled ? 'tool-btn--burn-active' : '' }}" bind:tap="onToggleBurn">
+    <text>焚</text>
+  </view>
   <t-button class="send" theme="primary" shape="round" disabled="{{ !input }}" bind:tap="sendMessage">发送</t-button>
 </view>
 
@@ -129,14 +135,6 @@
     <view class="action-drawer__header">
       <view class="action-drawer__title">选择操作</view>
       <t-icon name="close" size="48rpx" bind:tap="onCloseDrawer" />
-    </view>
-
-    <view class="action-drawer__row">
-      <view class="action-drawer__row-left">
-        <view class="action-drawer__row-title">阅后即焚</view>
-        <view class="action-drawer__row-sub">{{ burnSeconds }} 秒</view>
-      </view>
-      <t-switch value="{{ burnEnabled }}" bind:change="onToggleBurn" />
     </view>
 
     <view class="action-drawer__content">
