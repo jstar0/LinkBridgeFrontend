@@ -27,9 +27,8 @@
             data-mid="{{ item.messageId }}"
           >
           <block wx:if="{{ item.type === 'text' }}">
-            <view wx:if="{{ item.burnAfterSec > 0 }}" class="burn-tip {{ item.burned ? 'burn-tip--burned' : '' }}">
-              <text wx:if="{{ item.burned }}">已焚毁</text>
-              <text wx:elif="{{ item.burnRead }}">{{ item.burnRemainingSec }}s 后焚毁</text>
+            <view wx:if="{{ item.burnAfterSec > 0 && !item.burned }}" class="burn-tip">
+              <text wx:if="{{ item.burnRead }}">{{ item.burnRemainingSec }}s 后焚毁</text>
               <text wx:else>阅后 {{ item.burnAfterSec }}s 焚毁</text>
             </view>
             <text space="nbsp">{{ item.content }}</text>
@@ -67,9 +66,8 @@
             data-mid="{{ item.messageId }}"
           >
           <block wx:if="{{ item.type === 'text' }}">
-            <view wx:if="{{ item.burnAfterSec > 0 }}" class="burn-tip {{ item.burned ? 'burn-tip--burned' : '' }}">
-              <text wx:if="{{ item.burned }}">已焚毁</text>
-              <text wx:elif="{{ item.burnRead }}">{{ item.burnRemainingSec }}s 后焚毁</text>
+            <view wx:if="{{ item.burnAfterSec > 0 && !item.burned }}" class="burn-tip">
+              <text wx:if="{{ item.burnRead }}">{{ item.burnRemainingSec }}s 后焚毁</text>
               <text wx:else>阅后 {{ item.burnAfterSec }}s 焚毁</text>
             </view>
             <text space="nbsp">{{ item.content }}</text>
