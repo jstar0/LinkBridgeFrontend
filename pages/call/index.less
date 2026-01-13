@@ -80,12 +80,27 @@
       align-items: center;
       justify-content: center;
       gap: 12rpx;
+      width: 120rpx;
+      transform: translateZ(0);
+      transition: transform 120ms ease, opacity 120ms ease;
+    }
+
+    .call-action--active {
+      transform: scale(0.96);
+      opacity: 0.9;
+    }
+
+    .call-btn.call-btn--active {
+      background: rgba(255, 255, 255, 0.34) !important;
     }
 
     .call-action__label {
       font-size: 22rpx;
       color: rgba(255, 255, 255, 0.85);
       line-height: 1;
+      height: 22rpx;
+      display: flex;
+      align-items: center;
     }
   }
 }

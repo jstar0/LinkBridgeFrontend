@@ -21,13 +21,30 @@
     <t-button wx:if="{{showCancel}}" class="call-btn call-btn-hangup" theme="danger" shape="circle" icon="call-off" bind:tap="onTapCancel" />
 
     <!-- In call: Mute + Hangup + Speaker -->
-    <view wx:if="{{showHangup}}" class="call-action" catchtap="onToggleMute">
-      <t-button class="call-btn" theme="default" shape="circle" icon="{{muted ? 'microphone-1' : 'microphone'}}" />
+    <view wx:if="{{showHangup}}" class="call-action" hover-class="call-action--active" hover-start-time="0" hover-stay-time="80">
+      <t-button
+        class="call-btn {{muted ? 'call-btn--active' : ''}}"
+        theme="default"
+        shape="circle"
+        icon="{{muted ? 'microphone-1' : 'microphone'}}"
+        bind:tap="onToggleMute"
+      />
       <view class="call-action__label">{{muted ? '已静音' : '静音'}}</view>
     </view>
-    <t-button wx:if="{{showHangup}}" class="call-btn call-btn-hangup" theme="danger" shape="circle" icon="call-off" bind:tap="onTapHangup" />
-    <view wx:if="{{showHangup}}" class="call-action" catchtap="onToggleSpeaker">
-      <t-button class="call-btn" theme="default" shape="circle" icon="{{speakerOn ? 'sound' : 'sound-mute'}}" />
+
+    <view wx:if="{{showHangup}}" class="call-action" hover-class="call-action--active" hover-start-time="0" hover-stay-time="80">
+      <t-button class="call-btn call-btn-hangup" theme="danger" shape="circle" icon="call-off" bind:tap="onTapHangup" />
+      <view class="call-action__label">挂断</view>
+    </view>
+
+    <view wx:if="{{showHangup}}" class="call-action" hover-class="call-action--active" hover-start-time="0" hover-stay-time="80">
+      <t-button
+        class="call-btn {{speakerOn ? 'call-btn--active' : ''}}"
+        theme="default"
+        shape="circle"
+        icon="{{speakerOn ? 'sound' : 'sound-mute'}}"
+        bind:tap="onToggleSpeaker"
+      />
       <view class="call-action__label">{{speakerOn ? '外放' : '听筒'}}</view>
     </view>
   </view>
