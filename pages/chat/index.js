@@ -786,34 +786,34 @@ Page({
 
         const raw = name || url || fullUrl;
         const ext = String(raw.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
-        const canOpen = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'].includes(ext);
+        const fileName = name || (ext ? `文件.${ext}` : '文件');
 
         // Persist the downloaded temp file into app storage so it's not reclaimed by the system.
-        // This is the closest to "save to local" available in Mini Program sandbox.
-        const saveAndMaybeOpen = () =>
+        // Then share it to WeChat chat (consistent UX for all file types).
+        const saveThenShare = () =>
           new Promise((resolve) => {
             if (typeof wx?.saveFile !== 'function') {
-              resolve({ saved: false, savedFilePath: filePath });
+              resolve({ savedFilePath: filePath });
               return;
             }
             wx.saveFile({
               tempFilePath: filePath,
-              success: (r) => resolve({ saved: true, savedFilePath: r?.savedFilePath || filePath }),
-              fail: () => resolve({ saved: false, savedFilePath: filePath }),
+              success: (r) => resolve({ savedFilePath: r?.savedFilePath || filePath }),
+              fail: () => resolve({ savedFilePath: filePath }),
             });
           }).then(({ savedFilePath }) => {
-            if (!canOpen) {
-              wx.showToast({ title: '已保存到本地', icon: 'none' });
+            if (typeof wx?.shareFileMessage !== 'function') {
+              wx.showToast({ title: '当前微信版本不支持分享文件', icon: 'none' });
               return;
             }
-            wx.openDocument({
+            wx.shareFileMessage({
               filePath: savedFilePath,
-              showMenu: true,
-              fail: () => wx.showToast({ title: '已保存到本地（微信暂不支持打开）', icon: 'none' }),
+              fileName,
+              fail: () => wx.showToast({ title: '分享失败', icon: 'none' }),
             });
           });
 
-        saveAndMaybeOpen().catch(() => null);
+        saveThenShare().catch(() => null);
       },
       fail: () => {
         wx.hideLoading();
