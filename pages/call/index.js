@@ -133,8 +133,8 @@ Page({
   // Receive buffer: merge a few PCM frames into a longer WAV chunk to reduce boundary clicks.
   jitterBuffer: [], // base64 frames (PCM16LE)
   // Low-latency mode (phone-first): smaller chunks and minimal prebuffer.
-  // Note: actual frame duration depends on recorder `frameSize` (KB). Keep chunks ~200-350ms for stability.
-  batchSize: 4,
+  // Note: actual frame duration depends on recorder `frameSize` (KB). Keep chunks ~150-250ms for lower latency.
+  batchSize: 3,
   prebufferSegments: 1, // start as soon as we have the first chunk
   // Crossfade tends to drift in Mini Program runtimes (timer jitter) and can produce buzz/comb artifacts.
   // Keep it off by default for stability; we can re-enable later if needed.
@@ -240,26 +240,13 @@ Page({
 
   onToggleSpeaker() {
     const next = !this.data.speakerOn;
-
-    // Turning on speaker greatly increases the risk of echo/feedback (buzz) because mic may re-capture playback.
-    if (next) {
-      showModal({
-        title: '开启外放？',
-        content: '外放可能导致滋滋声/回声，建议使用听筒或戴耳机。仍要开启外放吗？',
-        confirmText: '开启外放',
-        cancelText: '取消',
-      }).then((res) => {
-        if (!res?.confirm) return;
-        this.setData({ speakerOn: true }, () => {
-          const ok = setAudioRoute({ speakerOn: true });
-          if (!ok) wx.showToast({ title: '当前环境不支持切换外放', icon: 'none' });
-        });
-      });
-      return;
-    }
-
-    this.setData({ speakerOn: false }, () => {
-      setAudioRoute({ speakerOn: false });
+    this.setData({ speakerOn: next }, () => {
+      const ok = setAudioRoute({ speakerOn: next });
+      if (!ok) {
+        wx.showToast({ title: '当前环境不支持切换音频输出', icon: 'none' });
+        return;
+      }
+      wx.showToast({ title: next ? '已切换外放' : '已切换听筒', icon: 'none' });
     });
   },
 
@@ -535,7 +522,7 @@ Page({
       this._jitterFlushTimer = null;
 
       // For first audible output, keep it small but avoid too tiny chunks (stutter risk).
-      const minFrames = this.hasEverStartedPlayout ? 2 : 2;
+      const minFrames = 2;
       const available = this.jitterBuffer.length;
       if (available < minFrames) {
         if (available > 0) this.scheduleJitterFlush();
@@ -548,7 +535,7 @@ Page({
       this.writeMergedAudioFrames(frames);
 
       if (this.jitterBuffer.length > 0) this.scheduleJitterFlush();
-    }, 120);
+    }, 80);
   },
 
   stopPlayout() {
