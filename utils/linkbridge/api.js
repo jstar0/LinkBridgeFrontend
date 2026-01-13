@@ -1,9 +1,9 @@
 function getBaseUrl() {
-  return 'http://103.40.13.96:8081';
+  return 'https://linkbridge.mcxin.top';
 }
 
 function getWsUrl() {
-  return getBaseUrl().replace(/^http/i, 'ws');
+  return getBaseUrl().replace(/^https/i, 'wss');
 }
 
 // Align with template naming.
