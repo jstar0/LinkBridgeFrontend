@@ -29,7 +29,7 @@ module.exports = {
     if (!url) return '';
     if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) return url;
     // Hardcoded cloud backend base URL (same as frontend api).
-    var base = 'http://103.40.13.96:8081';
+    var base = 'https://linkbridge.mcxin.top';
     if (url.charAt(0) === '/') return base + url;
     return base + '/' + url;
   },

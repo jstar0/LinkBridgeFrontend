@@ -868,6 +868,27 @@ Page({
       wx.navigateTo({ url });
       return;
     }
+    if (status.state === 'archived' && status.sessionId) {
+      wx.showLoading({ title: '恢复中...' });
+      api
+        .reactivateSession(status.sessionId)
+        .then((s) => {
+          safeHideLoading();
+          const sessionId = s?.id || status.sessionId;
+          this.setRelationshipStatus(peerId, { state: 'chat', sessionId });
+          const peerName = selected?.displayName || '';
+          const url =
+            `/pages/chat/index?sessionId=${encodeURIComponent(sessionId)}` +
+            (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '') +
+            `&peerUserId=${encodeURIComponent(peerId)}`;
+          wx.navigateTo({ url });
+        })
+        .catch((err) => {
+          safeHideLoading();
+          wx.showToast({ title: err?.message || '恢复失败', icon: 'none' });
+        });
+      return;
+    }
     if (status.state === 'pending') {
       this.onShowToast('#t-toast', '已发送请求，等待对方同意');
       return;
@@ -936,7 +957,49 @@ Page({
           return;
         }
         if (code === 'SESSION_EXISTS') {
-          wx.showToast({ title: '会话已存在，请在会话列表中打开', icon: 'none' });
+          // A session may exist but be archived, which is not visible in the active list.
+          // Align with "scan code" behavior: reactivate and open it.
+          Promise.allSettled([api.listSessions('active'), api.listSessions('archived')]).then(([aRes, arRes]) => {
+            const active = aRes.status === 'fulfilled' ? aRes.value || [] : [];
+            const archived = arRes.status === 'fulfilled' ? arRes.value || [] : [];
+            const all = [...active, ...archived];
+            const s = all.find((x) => (x?.peer?.id || '') === peerId);
+            if (!s?.id) {
+              wx.showToast({ title: '会话已存在，请在会话列表中打开', icon: 'none' });
+              return;
+            }
+
+            const sid = s.id;
+            const isArchived = String(s?.status || '') === 'archived' || !!s?.archivedAt;
+            const openChat = (sessionId) => {
+              const peerName = selected?.displayName || '';
+              const url =
+                `/pages/chat/index?sessionId=${encodeURIComponent(sessionId)}` +
+                (peerName ? `&peerName=${encodeURIComponent(peerName)}` : '') +
+                `&peerUserId=${encodeURIComponent(peerId)}`;
+              wx.navigateTo({ url });
+            };
+
+            if (!isArchived) {
+              this.setRelationshipStatus(peerId, { state: 'chat', sessionId: sid });
+              openChat(sid);
+              return;
+            }
+
+            wx.showLoading({ title: '恢复中...' });
+            api
+              .reactivateSession(sid)
+              .then((ss) => {
+                safeHideLoading();
+                const sessionId = ss?.id || sid;
+                this.setRelationshipStatus(peerId, { state: 'chat', sessionId });
+                openChat(sessionId);
+              })
+              .catch(() => {
+                safeHideLoading();
+                wx.showToast({ title: '会话已存在，请在归档中打开', icon: 'none' });
+              });
+          });
           return;
         }
         wx.showToast({ title: err?.message || '发送失败', icon: 'none' });
@@ -1001,14 +1064,21 @@ Page({
       return Promise.resolve();
     }
 
-    return Promise.allSettled([api.listSessions('active'), api.listSessionRequests('outgoing', 'pending')]).then(
-      ([sessRes, reqRes]) => {
-        const sessions = sessRes.status === 'fulfilled' ? sessRes.value || [] : [];
+    return Promise.allSettled([api.listSessions('active'), api.listSessions('archived'), api.listSessionRequests('outgoing', 'pending')]).then(
+      ([activeRes, archivedRes, reqRes]) => {
+        const sessions = activeRes.status === 'fulfilled' ? activeRes.value || [] : [];
+        const archivedSessions = archivedRes.status === 'fulfilled' ? archivedRes.value || [] : [];
         const outReq = reqRes.status === 'fulfilled' ? reqRes.value || [] : [];
 
-        const s = (sessions || []).find((x) => (x?.peer?.id || '') === peerId && (x?.status || 'active') !== 'archived');
+        const s = (sessions || []).find((x) => (x?.peer?.id || '') === peerId);
         if (s?.id) {
           this.setRelationshipStatus(peerId, { state: 'chat', sessionId: s.id });
+          return;
+        }
+
+        const a = (archivedSessions || []).find((x) => (x?.peer?.id || '') === peerId);
+        if (a?.id) {
+          this.setRelationshipStatus(peerId, { state: 'archived', sessionId: a.id });
           return;
         }
 

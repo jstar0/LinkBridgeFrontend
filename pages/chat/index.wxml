@@ -43,7 +43,7 @@
             />
           </block>
           <block wx:elif="{{ item.type === 'file' }}">
-            <view class="msg-file" bind:tap="onTapFileMessage" data-url="{{ item.meta.url }}">
+            <view class="msg-file" bind:tap="onTapFileMessage" data-url="{{ item.meta.url }}" data-name="{{ item.meta.name }}">
               <t-icon name="file" size="40rpx" />
               <view class="msg-file__name">{{ item.meta.name }}</view>
             </view>
@@ -82,7 +82,7 @@
             />
           </block>
           <block wx:elif="{{ item.type === 'file' }}">
-            <view class="msg-file" bind:tap="onTapFileMessage" data-url="{{ item.meta.url }}">
+            <view class="msg-file" bind:tap="onTapFileMessage" data-url="{{ item.meta.url }}" data-name="{{ item.meta.name }}">
               <t-icon name="file" size="40rpx" />
               <view class="msg-file__name">{{ item.meta.name }}</view>
             </view>

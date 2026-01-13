@@ -769,6 +769,7 @@ Page({
 
   onTapFileMessage(event) {
     const url = event?.currentTarget?.dataset?.url || '';
+    const name = String(event?.currentTarget?.dataset?.name || '').trim();
     const fullUrl = this.getFileUrl({ url });
     if (!fullUrl) return;
 
@@ -782,10 +783,26 @@ Page({
           wx.showToast({ title: '下载失败', icon: 'none' });
           return;
         }
+
+        const raw = name || url || fullUrl;
+        const ext = String(raw.split('?')[0].split('#')[0].split('.').pop() || '').toLowerCase();
+        const canOpen = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'].includes(ext);
+
+        // For formats WeChat can't open, avoid showing "cannot open" error. Download success is still valuable.
+        if (!canOpen) {
+          wx.showToast({ title: '已下载', icon: 'none' });
+          return;
+        }
+
         wx.openDocument({
           filePath,
           showMenu: true,
-          fail: () => wx.showToast({ title: '无法打开文件', icon: 'none' }),
+          success: () => {
+            // opened
+          },
+          fail: () => {
+            wx.showToast({ title: '已下载（微信暂不支持打开此格式）', icon: 'none' });
+          },
         });
       },
       fail: () => {
