@@ -2,6 +2,16 @@ const api = require('../../utils/linkbridge/api');
 const app = getApp();
 
 const COLLAPSED_GROUPS_KEY = 'lb_message_group_collapsed_v1';
+const E2EE_KEY_PREFIX = 'LBK1|';
+const E2EE_ENC_PREFIX = 'LBE1|';
+
+function formatSessionPreviewText(raw) {
+  const t = typeof raw === 'string' ? raw : raw == null ? '' : String(raw);
+  if (!t) return ' ';
+  if (t.startsWith(E2EE_KEY_PREFIX)) return ' ';
+  if (t.startsWith(E2EE_ENC_PREFIX)) return '加密消息';
+  return t;
+}
 const DRAG_TOP_ZONE_PX = 96;
 // Should cover the on-screen bottom drop zone which sits above the custom tab bar.
 const DRAG_BOTTOM_ZONE_PX = 150;
@@ -235,7 +245,7 @@ Page({
           ...session,
           unreadCount: Number(unreadMap?.[session.id] || 0) || 0,
           avatar: (session && session.peer && session.peer.avatarUrl) || '/static/chat/avatar.png',
-          desc: session && session.lastMessageText ? session.lastMessageText : ' ',
+          desc: formatSessionPreviewText(session && session.lastMessageText ? session.lastMessageText : ' '),
         };
         const next = [decorated, ...this.data.sessions.filter((s) => s.id !== session.id)];
         this.setSessions(next);
@@ -267,6 +277,9 @@ Page({
         const sid = getSessionIdFromMessageEnv(env);
         if (!sid) return;
 
+        const rawText = msg?.text || '';
+        if (typeof rawText === 'string' && rawText.startsWith(E2EE_KEY_PREFIX)) return;
+
         // If user is currently viewing this session in chat, do not mark it as unread.
         try {
           const pages = getCurrentPages();
@@ -290,8 +303,8 @@ Page({
         if (idx < 0) return;
 
         const session = { ...next[idx] };
-        session.lastMessageText = msg?.text || session.lastMessageText || '';
-        session.desc = msg?.text || session.desc || ' ';
+        session.lastMessageText = rawText || session.lastMessageText || '';
+        session.desc = formatSessionPreviewText(rawText) || session.desc || ' ';
         session.updatedAtMs = msg?.createdAtMs || session.updatedAtMs;
 
         const unreadMap = app?.globalData?.unreadBySession || {};
@@ -336,7 +349,7 @@ Page({
           ...s,
           unreadCount: Number(unreadMap?.[s?.id] || 0) || 0,
           avatar: (s && s.peer && s.peer.avatarUrl) || '/static/chat/avatar.png',
-          desc: s && s.lastMessageText ? s.lastMessageText : ' ',
+          desc: formatSessionPreviewText(s && s.lastMessageText ? s.lastMessageText : ' '),
         }));
 
         // Prune stale unread entries for sessions that no longer exist.

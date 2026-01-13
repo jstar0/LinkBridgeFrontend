@@ -5,6 +5,7 @@
     "t-loading": "tdesign-miniprogram/loading/loading",
     "t-button": "tdesign-miniprogram/button/button",
     "t-icon": "tdesign-miniprogram/icon/icon",
+    "t-switch": "tdesign-miniprogram/switch/switch",
     "t-popup": "tdesign-miniprogram/popup/popup"
   },
   "navigationStyle": "custom"

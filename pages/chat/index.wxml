@@ -7,7 +7,7 @@
 </t-navbar>
 
 <view class="chat-container">
-  <scroll-view class="content" scroll-y scroll-with-animation="{{ false }}" scroll-top="{{ scrollTop }}">
+  <scroll-view id="chatScroll" class="content" scroll-y scroll-with-animation="{{ false }}" scroll-top="{{ scrollTop }}">
     <view class="messages">
       <block wx:for="{{ messages }}" wx:key="index">
         <!-- Show reactivation divider if this is the first message after reactivation -->
@@ -22,8 +22,16 @@
         </view>
 
         <view wx:if="{{ item.from === 0 }}" class="message-area">
-          <view class="message self">
+          <view
+            class="message self {{ item.burnAfterSec > 0 && !item.burned && !item.burnRead ? 'lb-burn-observe' : '' }}"
+            data-mid="{{ item.messageId }}"
+          >
           <block wx:if="{{ item.type === 'text' }}">
+            <view wx:if="{{ item.burnAfterSec > 0 }}" class="burn-tip {{ item.burned ? 'burn-tip--burned' : '' }}">
+              <text wx:if="{{ item.burned }}">已焚毁</text>
+              <text wx:elif="{{ item.burnRead }}">{{ item.burnRemainingSec }}s 后焚毁</text>
+              <text wx:else>阅后 {{ item.burnAfterSec }}s 焚毁</text>
+            </view>
             <text space="nbsp">{{ item.content }}</text>
           </block>
           <block wx:elif="{{ item.type === 'image' }}">
@@ -54,8 +62,16 @@
 
         <view wx:else class="message-area">
           <t-avatar image="{{ avatar }}" size="small" bind:tap="onTapPeerAvatar" />
-          <view class="message other">
+          <view
+            class="message other {{ item.burnAfterSec > 0 && !item.burned && !item.burnRead ? 'lb-burn-observe' : '' }}"
+            data-mid="{{ item.messageId }}"
+          >
           <block wx:if="{{ item.type === 'text' }}">
+            <view wx:if="{{ item.burnAfterSec > 0 }}" class="burn-tip {{ item.burned ? 'burn-tip--burned' : '' }}">
+              <text wx:if="{{ item.burned }}">已焚毁</text>
+              <text wx:elif="{{ item.burnRead }}">{{ item.burnRemainingSec }}s 后焚毁</text>
+              <text wx:else>阅后 {{ item.burnAfterSec }}s 焚毁</text>
+            </view>
             <text space="nbsp">{{ item.content }}</text>
           </block>
           <block wx:elif="{{ item.type === 'image' }}">
@@ -116,6 +132,15 @@
       <view class="action-drawer__title">选择操作</view>
       <t-icon name="close" size="48rpx" bind:tap="onCloseDrawer" />
     </view>
+
+    <view class="action-drawer__row">
+      <view class="action-drawer__row-left">
+        <view class="action-drawer__row-title">阅后即焚</view>
+        <view class="action-drawer__row-sub">{{ burnSeconds }} 秒</view>
+      </view>
+      <t-switch value="{{ burnEnabled }}" bind:change="onToggleBurn" />
+    </view>
+
     <view class="action-drawer__content">
       <view class="action-item" bind:tap="sendImage">
         <view class="action-item__icon">

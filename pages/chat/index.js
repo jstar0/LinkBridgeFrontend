@@ -1,16 +1,77 @@
 const api = require('../../utils/linkbridge/api');
 const app = getApp();
+const e2ee = require('../../utils/linkbridge/e2ee');
 
-function buildViewMessage(msg, myUserId) {
+const BURN_STATE_PREFIX = 'lb_burn_state_v1_';
+const DEFAULT_BURN_SECONDS = 10;
+
+function loadBurnState(sessionId) {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return {};
+  try {
+    const raw = wx.getStorageSync(`${BURN_STATE_PREFIX}${sid}`);
+    const obj = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {};
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveBurnState(sessionId, map) {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return;
+  try {
+    wx.setStorageSync(`${BURN_STATE_PREFIX}${sid}`, JSON.stringify(map || {}));
+  } catch (e) {
+    // ignore
+  }
+}
+
+function buildViewMessage(msg, myUserId, sessionId, burnStateMap) {
   const senderId = msg?.senderId || '';
   const type = msg?.type || 'text';
   const text = msg?.text || '';
   const meta = msg?.meta || {};
+
+  // Key announce messages are control frames; never show them in chat UI.
+  if (type === 'text' && e2ee.isKeyAnnounceText(text)) return null;
+
+  let content = text;
+  let encrypted = false;
+  let burnAfterSec = 0;
+  let decryptStatus = '';
+
+  if (type === 'text' && e2ee.isEncryptedText(text)) {
+    encrypted = true;
+    const dec = e2ee.decryptText(sessionId, text);
+    if (dec.ok) {
+      content = dec.text;
+      burnAfterSec = Number(dec.burnAfterSec || 0) || 0;
+    } else {
+      decryptStatus = String(dec.reason || 'DECRYPT_FAILED');
+      content = '加密消息（未解密）';
+    }
+  }
+
+  const messageId = msg?.id || null;
+  const burnState = messageId ? burnStateMap?.[messageId] : null;
+  const burnRead = !!burnState?.readAtMs;
+  const burned = !!burnState?.burned || (burnState?.expireAtMs && Number(burnState.expireAtMs) <= Date.now());
+  const expireAtMs = burnState?.expireAtMs ? Number(burnState.expireAtMs) : 0;
+  const remainingSec = expireAtMs ? Math.max(0, Math.ceil((expireAtMs - Date.now()) / 1000)) : burnAfterSec;
+
   return {
-    messageId: msg?.id || null,
+    messageId,
     from: senderId && myUserId && senderId === myUserId ? 0 : 1,
     type,
-    content: text,
+    rawText: text,
+    encrypted,
+    decryptStatus,
+    burnAfterSec,
+    burnRead,
+    burned,
+    burnRemainingSec: burnAfterSec > 0 ? remainingSec : 0,
+    content: burned && burnAfterSec > 0 ? '已焚毁' : content,
     meta,
     time: msg?.createdAtMs || Date.now(),
   };
@@ -65,6 +126,11 @@ Page({
     peerProfileVisible: false,
     peerProfile: { id: '', username: '', displayName: '', avatarUrl: '/static/chat/avatar.png' },
     messages: [],
+    e2eeReady: false,
+    e2eeHint: '',
+    burnEnabled: false,
+    burnSeconds: DEFAULT_BURN_SECONDS,
+    burnStateById: {},
     input: '',
     scrollTop: 0,
     scrollNonce: 0,
@@ -106,7 +172,10 @@ Page({
       archived,
       bottomBarHeight: getBottomBarBaseHeightPx(),
       bottomSpacer: getBottomBarBaseHeightPx(),
+      burnStateById: loadBurnState(sessionId),
     });
+
+    this.ensureE2EE();
 
     // Clear unread for this session when entering chat, even if user didn't come from the session list.
     if (typeof app?.setSessionUnread === 'function') app.setSessionUnread(sessionId, 0);
@@ -123,12 +192,27 @@ Page({
       const msg = env?.payload?.message;
       if (!msg || msg.sessionId !== this.data.sessionId) return;
 
+      const myId = this.data.myUserId || api.getUser()?.id || '';
+
+      // Consume key announce and do not show it.
+      if (msg?.type === 'text' && e2ee.isKeyAnnounceText(msg?.text || '')) {
+        // Ignore my own key announce message (otherwise we'd mistakenly store my pub as peer pub).
+        if (myId && msg?.senderId && String(msg.senderId) === String(myId)) return;
+        const res = e2ee.tryConsumeKeyAnnounce(this.data.sessionId, msg.text);
+        if (res?.ready) {
+          this.setData({ e2eeReady: true, e2eeHint: '' });
+          this.rebuildVisibleMessages();
+          wx.showToast({ title: '加密通道已建立', icon: 'none' });
+        }
+        return;
+      }
+
       const incomingID = msg?.id || '';
       if (incomingID && this.data.messages.some((m) => m.messageId === incomingID)) return;
 
-      const myId = this.data.myUserId || api.getUser()?.id || '';
-      const vm = buildViewMessage(msg, myId);
-      this.setData({ messages: [...this.data.messages, vm] });
+      const vm = buildViewMessage(msg, myId, this.data.sessionId, this.data.burnStateById);
+      if (!vm) return;
+      this.setData({ messages: [...this.data.messages, vm] }, () => this.afterMessagesUpdated());
       wx.nextTick(() => this.scrollToBottom());
     };
     api.addWebSocketHandler(this.wsHandler);
@@ -189,6 +273,8 @@ Page({
 
   onUnload() {
     if (this.wsHandler) api.removeWebSocketHandler(this.wsHandler);
+    this.teardownBurnTicker();
+    this.teardownBurnObserver();
   },
 
   loadMessages() {
@@ -202,8 +288,28 @@ Page({
       )
     ])
       .then(([messagesRes, session]) => {
+        // Consume any historical key announce messages so decryption can work on first open.
+        try {
+          const myId = this.data.myUserId || api.getUser()?.id || '';
+          (messagesRes?.messages || []).forEach((m) => {
+            if (m?.type === 'text' && e2ee.isKeyAnnounceText(m?.text || '')) {
+              if (myId && m?.senderId && String(m.senderId) === String(myId)) return;
+              e2ee.tryConsumeKeyAnnounce(this.data.sessionId, m.text);
+            }
+          });
+        } catch (e) {
+          // ignore
+        }
+
+        // Re-check readiness after consuming key announces.
+        const ready = !!e2ee.getSessionKey(this.data.sessionId);
+        if (ready !== !!this.data.e2eeReady) this.setData({ e2eeReady: ready, e2eeHint: ready ? '' : this.data.e2eeHint });
+
         const myId = this.data.myUserId || api.getUser()?.id || '';
-        const vms = (messagesRes?.messages || []).map((m) => buildViewMessage(m, myId));
+        const burnMap = this.data.burnStateById || {};
+        const vms = (messagesRes?.messages || [])
+          .map((m) => buildViewMessage(m, myId, this.data.sessionId, burnMap))
+          .filter(Boolean);
 
         // Check if session was reactivated
         const reactivatedAt = session?.reactivatedAt ? new Date(session.reactivatedAt).getTime() : null;
@@ -212,7 +318,7 @@ Page({
           messages: vms,
           loading: false,
           reactivatedAt
-        });
+        }, () => this.afterMessagesUpdated());
         wx.nextTick(() => this.scrollToBottom());
         setTimeout(() => this.scrollToBottom(), 80);
         setTimeout(() => this.scrollToBottom(), 220);
@@ -248,20 +354,212 @@ Page({
     this.setData({ input: event?.detail?.value || '' });
   },
 
+  ensureE2EE() {
+    const sid = this.data.sessionId || '';
+    if (!sid) return;
+
+    // If we already have a derived session key, we are ready.
+    const key = e2ee.getSessionKey(sid);
+    if (key) {
+      this.setData({ e2eeReady: true, e2eeHint: '' });
+      return;
+    }
+
+    // Ensure we announce our public key at least once per session.
+    if (e2ee.shouldAnnounceKey(sid)) {
+      const keyMsg = e2ee.buildKeyAnnounceText();
+      api
+        .sendTextMessage(sid, keyMsg)
+        .then(() => e2ee.markKeyAnnounced(sid))
+        .catch(() => null);
+    }
+
+    this.setData({ e2eeReady: false, e2eeHint: '正在建立加密通道…' });
+  },
+
+  rebuildVisibleMessages() {
+    const myId = this.data.myUserId || api.getUser()?.id || '';
+    const burnMap = this.data.burnStateById || {};
+
+    const next = (this.data.messages || [])
+      .map((vm) => {
+        if (!vm) return null;
+        if (vm.type !== 'text') return vm;
+        const raw = vm.rawText || vm.content || '';
+        if (e2ee.isKeyAnnounceText(raw)) return null;
+        if (!e2ee.isEncryptedText(raw)) return vm;
+
+        const fakeMsg = {
+          id: vm.messageId,
+          senderId: vm.from === 0 ? myId : 'peer',
+          type: 'text',
+          text: raw,
+          createdAtMs: vm.time,
+        };
+        return buildViewMessage(fakeMsg, myId, this.data.sessionId, burnMap);
+      })
+      .filter(Boolean);
+
+    this.setData({ messages: next }, () => this.afterMessagesUpdated());
+  },
+
+  onToggleBurn(e) {
+    const v = !!e?.detail?.value;
+    this.setData({ burnEnabled: v });
+  },
+
+  afterMessagesUpdated() {
+    this.refreshBurnObserver();
+    this.ensureBurnTicker();
+  },
+
+  refreshBurnObserver() {
+    this.teardownBurnObserver();
+
+    const shouldObserve = (this.data.messages || []).some((m) => m?.type === 'text' && m?.burnAfterSec > 0 && !m?.burned);
+    if (!shouldObserve) return;
+
+    const observer = wx.createIntersectionObserver(this, { observeAll: true });
+    // Observe within the scroll-view.
+    try {
+      observer.relativeTo('#chatScroll', { top: 0, bottom: 0 });
+    } catch (e) {
+      observer.relativeToViewport({ top: 0, bottom: 0 });
+    }
+    observer.observe('.lb-burn-observe', (res) => {
+      const mid = res?.dataset?.mid || '';
+      const ratio = Number(res?.intersectionRatio || 0) || 0;
+      if (!mid || ratio < 0.6) return;
+      this.onBurnMessageSeen(mid);
+    });
+    this._burnObserver = observer;
+  },
+
+  teardownBurnObserver() {
+    try {
+      if (this._burnObserver) this._burnObserver.disconnect();
+    } catch (e) {
+      // ignore
+    }
+    this._burnObserver = null;
+  },
+
+  onBurnMessageSeen(messageId) {
+    const mid = String(messageId || '').trim();
+    if (!mid) return;
+
+    const msg = (this.data.messages || []).find((m) => String(m?.messageId || '') === mid);
+    if (!msg || msg.type !== 'text') return;
+    if (!(Number(msg.burnAfterSec || 0) > 0)) return;
+    if (msg.burned) return;
+
+    const map = this.data.burnStateById || {};
+    if (map?.[mid]?.readAtMs) return;
+
+    const readAtMs = Date.now();
+    const expireAtMs = readAtMs + Number(msg.burnAfterSec) * 1000;
+    map[mid] = { readAtMs, expireAtMs, burned: false };
+    this.setData({ burnStateById: map });
+    saveBurnState(this.data.sessionId, map);
+
+    this.tickBurnCountdowns();
+  },
+
+  ensureBurnTicker() {
+    if (this._burnTicker) return;
+    const map = this.data.burnStateById || {};
+    const need = (this.data.messages || []).some((m) => {
+      if (!m || m.type !== 'text') return false;
+      if (!(Number(m.burnAfterSec || 0) > 0) || m.burned) return false;
+      const mid = String(m.messageId || '').trim();
+      if (!mid) return false;
+      return !!map?.[mid]?.readAtMs;
+    });
+    if (!need) return;
+    this._burnTicker = setInterval(() => this.tickBurnCountdowns(), 450);
+  },
+
+  teardownBurnTicker() {
+    if (!this._burnTicker) return;
+    clearInterval(this._burnTicker);
+    this._burnTicker = null;
+  },
+
+  tickBurnCountdowns() {
+    const map = this.data.burnStateById || {};
+    const now = Date.now();
+    let changed = false;
+
+    const nextMsgs = (this.data.messages || []).map((m) => {
+      if (!m || m.type !== 'text') return m;
+      const burnAfter = Number(m.burnAfterSec || 0) || 0;
+      if (burnAfter <= 0) return m;
+      const mid = String(m.messageId || '').trim();
+      if (!mid) return m;
+
+      const st = map?.[mid];
+      if (!st?.readAtMs || !st?.expireAtMs) return m;
+
+      const expireAt = Number(st.expireAtMs);
+      const remainingSec = Math.max(0, Math.ceil((expireAt - now) / 1000));
+      const burnedNow = remainingSec <= 0;
+
+      const next = { ...m };
+      if (next.burnRemainingSec !== remainingSec) {
+        next.burnRemainingSec = remainingSec;
+        changed = true;
+      }
+      if (!!next.burned !== burnedNow) {
+        next.burned = burnedNow;
+        next.content = burnedNow ? '已焚毁' : next.content;
+        changed = true;
+      }
+
+      if (burnedNow && !st.burned) {
+        map[mid] = { ...st, burned: true };
+      }
+
+      return next;
+    });
+
+    if (changed) {
+      this.setData({ messages: nextMsgs, burnStateById: map });
+      saveBurnState(this.data.sessionId, map);
+    }
+
+    const hasActive = nextMsgs.some((m) => m?.type === 'text' && m?.burnAfterSec > 0 && !m?.burned);
+    if (!hasActive) this.teardownBurnTicker();
+  },
+
   sendMessage() {
     const content = (this.data.input || '').trim();
     if (!content) return;
 
     this.setData({ input: '' });
 
+    if (!this.data.e2eeReady) {
+      this.ensureE2EE();
+      wx.showToast({ title: '加密通道建立中', icon: 'none' });
+      return;
+    }
+
+    const burnAfter = this.data.burnEnabled ? Number(this.data.burnSeconds || DEFAULT_BURN_SECONDS) || DEFAULT_BURN_SECONDS : 0;
+    const enc = e2ee.encryptText(this.data.sessionId, content, burnAfter);
+    if (!enc?.ok || !enc?.text) {
+      this.ensureE2EE();
+      wx.showToast({ title: '暂时无法加密发送', icon: 'none' });
+      return;
+    }
+
     api
-      .sendTextMessage(this.data.sessionId, content)
+      .sendTextMessage(this.data.sessionId, enc.text)
       .then((msg) => {
         const myId = this.data.myUserId || api.getUser()?.id || '';
-        const vm = buildViewMessage(msg, myId);
+        const vm = buildViewMessage(msg, myId, this.data.sessionId, this.data.burnStateById);
+        if (!vm) return;
         const id = vm?.messageId || '';
         if (id && this.data.messages.some((m) => m.messageId === id)) return;
-        this.setData({ messages: [...this.data.messages, vm] });
+        this.setData({ messages: [...this.data.messages, vm] }, () => this.afterMessagesUpdated());
         wx.nextTick(() => this.scrollToBottom());
       })
       .catch(() => {
@@ -331,10 +629,11 @@ Page({
       .then((msg) => {
         wx.hideLoading();
         const myId = this.data.myUserId || api.getUser()?.id || '';
-        const vm = buildViewMessage(msg, myId);
+        const vm = buildViewMessage(msg, myId, this.data.sessionId, this.data.burnStateById);
+        if (!vm) return;
         const id = vm?.messageId || '';
         if (id && this.data.messages.some((m) => m.messageId === id)) return;
-        this.setData({ messages: [...this.data.messages, vm], sending: false });
+        this.setData({ messages: [...this.data.messages, vm], sending: false }, () => this.afterMessagesUpdated());
         wx.nextTick(() => this.scrollToBottom());
       })
       .catch(() => {
@@ -426,10 +725,11 @@ Page({
           .then((msg) => {
             wx.hideLoading();
             const myId = this.data.myUserId || api.getUser()?.id || '';
-            const vm = buildViewMessage(msg, myId);
+            const vm = buildViewMessage(msg, myId, this.data.sessionId, this.data.burnStateById);
+            if (!vm) return;
             const id = vm?.messageId || '';
             if (id && this.data.messages.some((m) => m.messageId === id)) return;
-            this.setData({ messages: [...this.data.messages, vm], sending: false });
+            this.setData({ messages: [...this.data.messages, vm], sending: false }, () => this.afterMessagesUpdated());
             wx.nextTick(() => this.scrollToBottom());
           })
           .catch((err) => {
