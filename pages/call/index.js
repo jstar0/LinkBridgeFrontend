@@ -118,10 +118,16 @@ Page({
   hasEverStartedPlayout: false,
   // Receive buffer: merge a few PCM frames into a longer WAV chunk to reduce boundary clicks.
   jitterBuffer: [], // base64 frames (PCM16LE)
-  batchSize: 6, // 6 * ~160ms ~= ~1s per chunk (better quality, fewer boundaries)
-  prebufferSegments: 2, // wait for >=2 chunks before starting playback to avoid gaps
+  batchSize: 4, // 4 * ~160ms ~= ~640ms per chunk (lower latency; still reduces boundaries)
+  prebufferSegments: 1, // start earlier; avoid long initial silence
+  // Crossfade tends to drift in Mini Program runtimes (timer jitter) and can produce buzz/comb artifacts.
+  // Keep it off by default for stability; we can re-enable later if needed.
+  enableCrossfade: false,
   crossfadeMs: 120,
   overlapMs: 80,
+  // Keep latency bounded: if we fall behind, drop old buffered chunks to stay near-real-time.
+  maxQueueSegments: 4,
+  _jitterFlushTimer: null,
   _crossfadeTimer: null,
   _crossfadeVolumeTimer: null,
   // Video call
@@ -458,9 +464,41 @@ Page({
       const framesToMerge = this.jitterBuffer.splice(0, this.batchSize);
       this.writeMergedAudioFrames(framesToMerge);
     }
+
+    // Flush partial frames soon to reduce long initial silence (especially right after entering the call).
+    this.scheduleJitterFlush();
+  },
+
+  scheduleJitterFlush() {
+    if (!this.startedAudio) return;
+    if (this._jitterFlushTimer) return;
+
+    // Wait a short while: if more frames arrive, we'll merge them as a larger chunk.
+    this._jitterFlushTimer = setTimeout(() => {
+      this._jitterFlushTimer = null;
+
+      const minFrames = 2;
+      const available = this.jitterBuffer.length;
+      if (available < minFrames) {
+        if (available > 0) this.scheduleJitterFlush();
+        return;
+      }
+
+      const n = Math.min(this.batchSize, available);
+      const frames = this.jitterBuffer.splice(0, n);
+      this.writeMergedAudioFrames(frames);
+
+      if (this.jitterBuffer.length > 0) this.scheduleJitterFlush();
+    }, 220);
   },
 
   stopPlayout() {
+    // Stop jitter flush timer
+    if (this._jitterFlushTimer) {
+      clearTimeout(this._jitterFlushTimer);
+      this._jitterFlushTimer = null;
+    }
+
     // Stop crossfade timers
     if (this._crossfadeTimer) {
       clearTimeout(this._crossfadeTimer);
@@ -509,8 +547,43 @@ Page({
     this._currentSeg = null;
   },
 
+  trimSegmentQueue() {
+    const max = Math.max(0, Number(this.maxQueueSegments || 0) || 0);
+    if (!max) return;
+    const q = Array.isArray(this.segmentQueue) ? this.segmentQueue : [];
+    if (q.length <= max) return;
+
+    const fs = wx.getFileSystemManager();
+    while (q.length > max) {
+      const drop = q.shift();
+      const path = String(drop?.path || '').trim();
+      if (!path) continue;
+      try {
+        fs.unlink({ filePath: path, fail: () => null });
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    this.segmentQueue = q;
+  },
+
   ensurePlayers() {
-    if (Array.isArray(this.audioPlayers) && this.audioPlayers.length === 2) return;
+    const need = this.enableCrossfade ? 2 : 1;
+    if (Array.isArray(this.audioPlayers) && this.audioPlayers.length === need) return;
+
+    // If player count changes, clean up old instances first to avoid leaking audio resources.
+    if (Array.isArray(this.audioPlayers) && this.audioPlayers.length) {
+      this.audioPlayers.forEach((p) => {
+        try {
+          p.stop();
+          p.destroy();
+        } catch (e) {
+          // ignore
+        }
+      });
+      this.audioPlayers = null;
+    }
 
     // Use WebAudio backend if available (better for frequent playback).
     const mk = () => {
@@ -521,7 +594,7 @@ Page({
       }
     };
 
-    this.audioPlayers = [mk(), mk()];
+    this.audioPlayers = this.enableCrossfade ? [mk(), mk()] : [mk()];
     this.activePlayerIdx = 0;
 
     try {
@@ -541,6 +614,16 @@ Page({
         if (!this.startedAudio) return;
         const cur = this._currentSeg;
         if (!cur || cur.playerIdx !== idx) return;
+
+        // Cancel any scheduled crossfade (if enabled).
+        if (this._crossfadeTimer) {
+          clearTimeout(this._crossfadeTimer);
+          this._crossfadeTimer = null;
+        }
+        if (this._crossfadeVolumeTimer) {
+          clearInterval(this._crossfadeVolumeTimer);
+          this._crossfadeVolumeTimer = null;
+        }
 
         try {
           wx.getFileSystemManager().unlink({ filePath: cur.path, fail: () => null });
@@ -629,6 +712,7 @@ Page({
         success: () => {
           const durationMs = Math.max(1, Math.round((totalSize / (16000 * 2)) * 1000));
           this.segmentQueue.push({ path: filePath, durationMs });
+          this.trimSegmentQueue();
           this.kickPlayout();
         },
         fail: () => null,
@@ -654,8 +738,8 @@ Page({
       return;
     }
 
-    // Current is playing; if we haven't scheduled crossfade and there is a next segment, schedule it.
-    if (!this._crossfadeTimer && (this.segmentQueue?.length || 0) > 0) {
+    // Current is playing; optionally schedule crossfade (disabled by default for stability).
+    if (this.enableCrossfade && !this._crossfadeTimer && (this.segmentQueue?.length || 0) > 0) {
       const cur = this._currentSeg;
       const delay = Math.max(0, Number(cur.durationMs || 0) - this.overlapMs);
       this._crossfadeTimer = setTimeout(() => {
@@ -671,7 +755,7 @@ Page({
     const durationMs = Number(s.durationMs || 0) || 0;
     if (!path || durationMs <= 0) return;
 
-    const idx = Number(this.activePlayerIdx || 0) || 0;
+    const idx = this.enableCrossfade ? Number(this.activePlayerIdx || 0) || 0 : 0;
     const player = this.audioPlayers[idx];
     if (!player) return;
 
